@@ -117,5 +117,3 @@ def run_test():
     print("Stopping motors.")
     set_motor(0, PWM1, DIR1)
     set_motor(0, PWM2, DIR2)
-
-run_test()
