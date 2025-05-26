@@ -10,33 +10,53 @@ import gc
 # https://github.com/raspberrypi/pico-examples/blob/master/pio/quadrature_encoder/quadrature_encoder.pio
 # === PIO-based Quadrature Encoder Counter with Reset ===
 
+
 class PIOQuadratureCounter:
+    #  the code must be loaded at address 0, because it uses computed jumps origin 0
+
+    #  the code works by running a loop that continuously shifts the 2 phase pins into
+    #  ISR and looks at the lower 4 bits to do a computed jump to an instruction that
+    #  does the proper "do nothing" | "increment" | "decrement" action for that pin
+    #  state change (or no change)
+
+    #  ISR holds the last state of the 2 pins during most of the code. The Y register
+    #  keeps the current encoder count and is incremented / decremented according to
+    #  the steps sampled
+
+    #  the program keeps trying to write the current count to the RX FIFO without
+    #  blocking. To read the current count, the user code must drain the FIFO first
+    #  and wait for a fresh sample (takes ~4 SM cycles on average). The worst case
+    #  sampling loop takes 10 cycles, so this program is able to read step rates up
+    #  to sysclk / 10  (e.g., sysclk 125MHz, max step rate = 12.5 Msteps/sec)
+
     @rp2.asm_pio(autopush=False, autopull=False)
     def counter():
         # --- Quadrature decoder state table (4x4 = 16 entries) ---
         # Each 'jmp' handles a transition from previous to current encoder state.
         # The action is: update (no change), increment, or decrement the counter.
-        jmp("update")    # 00 -> 00: no change
-        jmp("decrement") # 00 -> 01: count down
-        jmp("increment") # 00 -> 10: count up
-        jmp("update")    # 00 -> 11: no change
+        jmp("update")    # 00 -> 00: no change, ISR: 0b0000 -> line 0
+        jmp("decrement") # 00 -> 01: count down, ISR: 0b0001 -> line 1
+        jmp("increment") # 00 -> 10: count up, ISR: 0b0010 -> line 2
+        jmp("update")    # 00 -> 11: no change, ISR: 0b0011 -> line 3
 
-        jmp("increment") # 01 -> 00: count up
-        jmp("update")    # 01 -> 01: no change
-        jmp("update")    # 01 -> 10: no change
-        jmp("decrement") # 01 -> 11: count down
+        jmp("increment") # 01 -> 00: count up, ISR: 0b0100 -> line 4
+        jmp("update")    # 01 -> 01: no change, ISR: 0b0101 -> line 5
+        jmp("update")    # 01 -> 10: no change, ISR: 0b0110 -> line 6
+        jmp("decrement") # 01 -> 11: count down, ISR: 0b0111 -> line 7
 
-        jmp("decrement") # 10 -> 00: count down
-        jmp("update")    # 10 -> 01: no change
-        jmp("update")    # 10 -> 10: no change
-        jmp("increment") # 10 -> 11: count up
+        jmp("decrement") # 10 -> 00: count down, ISR: 0b1000 -> line 8
+        jmp("update")    # 10 -> 01: no change, ISR: 0b1001 -> line 9
+        jmp("update")    # 10 -> 10: no change, ISR: 0b1010 -> line 10
+        jmp("increment") # 10 -> 11: count up, ISR: 0b1011 -> line 11
 
-        jmp("update")    # 11 -> 00: no change
-        jmp("increment") # 11 -> 01: count up
+        jmp("update")    # 11 -> 00: no change, ISR: 0b1100 -> line 12
+        jmp("increment") # 11 -> 01: count up, ISR: 0b1101 -> line 13
 
         # --- Decrement handler ---
-        label("decrement")
-        jmp(y_dec, "update")  # Decrement y register (the counter), then go to update
+        # to save instruction space, we used the actual "decrement" label instead jmp("update")
+        label("decrement")   # 11 -> 10: no change, ISR: 0b1110 -> line 14
+        # to save instruction space, we do decrement and a branch in one opcode
+        jmp(y_dec, "update") # 11 -> 11: no change, ISR: 0b1111 -> line 15
 
         # --- Main update loop ---
         label("update")
