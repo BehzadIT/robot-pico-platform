@@ -2,13 +2,13 @@ from machine import Pin, Timer
 import time
 
 # === Motor 1 Encoder (Right Motor) ===
-enc1_a = Pin(27, Pin.IN, Pin.PULL_UP)  # Signal A
-enc1_b = Pin(26, Pin.IN, Pin.PULL_UP)  # Signal B
+enc1_a = Pin(10, Pin.IN, Pin.PULL_UP)  # Signal A
+enc1_b = Pin(11, Pin.IN, Pin.PULL_UP)  # Signal B
 pos1 = 0
 
 # === Motor 2 Encoder (Left Motor) ===
-enc2_a = Pin(6, Pin.IN, Pin.PULL_UP)   # Signal A
-enc2_b = Pin(7, Pin.IN, Pin.PULL_UP)   # Signal B
+enc2_a = Pin(20, Pin.IN, Pin.PULL_UP)   # Signal A
+enc2_b = Pin(21, Pin.IN, Pin.PULL_UP)   # Signal B
 pos2 = 0
 
 # === Correct CPR for rising-edge only counting ===

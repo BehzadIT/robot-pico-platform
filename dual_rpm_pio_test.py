@@ -121,6 +121,12 @@ class PIOQuadratureCounter:
 # === Constants ===
 ENCODER_CPR = 64
 GEAR_RATIO = 30
+enc1 = PIOQuadratureCounter(0, 10, 11)
+enc2 = PIOQuadratureCounter(1, 20, 21)
+
+# === Reset before run (optional if already reset in constructor) ===
+enc1.set_zero()
+enc2.set_zero()
 
 
 def read_rpms(enc1, enc2, interval_sec=0.05, cpr=ENCODER_CPR, gear_ratio=GEAR_RATIO):
@@ -143,6 +149,27 @@ def read_rpms(enc1, enc2, interval_sec=0.05, cpr=ENCODER_CPR, gear_ratio=GEAR_RA
     return rpm1, rpm2  # right, left
 
 
+def read_rpm(enc, interval_sec=0.05, cpr=ENCODER_CPR, gear_ratio=GEAR_RATIO):
+    """
+    Reads and returns the output shaft RPM for a single motor over a given interval.
+    :param enc: PIOQuadratureCounter instance
+    :param interval_sec: Measurement interval (e.g. 0.05s)
+    :return: rpm
+    """
+    start = enc.read()
+    utime.sleep(interval_sec)
+    end = enc.read()
+    delta = end - start
+    # Output shaft RPM (full quadrature)
+    rpm = (delta / (cpr * gear_ratio)) / interval_sec * 60
+    return rpm
+
+
+def read_left_motor_rpm(interval_sec=0.05):
+    return read_rpm(enc2, interval_sec, cpr=ENCODER_CPR, gear_ratio=GEAR_RATIO)
+
+def read_right_motor_rpm(interval_sec=0.05):
+    return read_rpm(enc1, interval_sec, cpr=ENCODER_CPR, gear_ratio=GEAR_RATIO)
 
 # === Motor Pins ===
 PWM1 = PWM(Pin(6)); DIR1 = Pin(7, Pin.OUT)
@@ -150,12 +177,8 @@ PWM2 = PWM(Pin(8)); DIR2 = Pin(9, Pin.OUT)
 PWM1.freq(1000); PWM2.freq(1000)
 
 # === Encoder Instances ===
-enc1 = PIOQuadratureCounter(0, 10, 11)
-enc2 = PIOQuadratureCounter(1, 20, 21)
 
-# === Reset before run (optional if already reset in constructor) ===
-enc1.set_zero()
-enc2.set_zero()
+
 
 # === Start Motors ===
 DIR1.value(1); DIR2.value(1)
