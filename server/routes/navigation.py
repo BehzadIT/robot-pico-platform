@@ -1,11 +1,10 @@
-from services.robot_cross_coupled_pid import main_control_loop
-import _thread
+from services.robot_drive_controller import driverController
 
 def init(app):
 
     @app.route('/forward')
     def forward(request):
-        _thread.start_new_thread(main_control_loop, ())
+        driverController.drive(100, direction=0)  # Forward at 100 RPM
         # motor_control.forward()
         # state.set_speed(100)
         return {'status': 'moving forward'}

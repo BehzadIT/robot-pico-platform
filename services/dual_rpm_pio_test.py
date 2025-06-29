@@ -207,3 +207,5 @@ def start_test(run_time_secs=5):
     enc1.deinit()
     enc2.deinit()
     gc.collect()
+
+# start_test()

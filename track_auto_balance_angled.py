@@ -1,7 +1,6 @@
 import utime
 from machine import Pin, PWM
-import rp2
-from dual_rpm_pio_test import PIOQuadratureCounter, read_rpms
+from services.dual_rpm_pio_test import PIOQuadratureCounter, read_rpms
 
 
 # def scale_factor_from_angle(angle_deg):

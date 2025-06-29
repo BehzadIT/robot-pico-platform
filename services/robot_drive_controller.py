@@ -26,11 +26,17 @@ class RobotDriveController:
         self._last_command_time = utime.ticks_ms()
 
     # Internal: called by your main control loop
-    def get_targets(self):
-        return self._target_rpm, self._target_angle, self._direction
+    def get_navigation_params(self):
+        return NavigationParams(self._target_rpm, self._target_angle, self._direction)
 
     def is_timeout(self, timeout_ms=2000):
         return utime.ticks_diff(utime.ticks_ms(), self._last_command_time) > timeout_ms
 
 # this is the singleton instance of the driver controller
 driverController = RobotDriveController()
+
+class NavigationParams:
+    def __init__(self, rpm, angle, direction):
+        self.rpm = rpm
+        self.angle = angle
+        self.direction = direction

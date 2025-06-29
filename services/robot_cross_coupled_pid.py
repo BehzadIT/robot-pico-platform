@@ -4,8 +4,9 @@
 
 from machine import Pin, PWM
 import time
-from simple_pid import PID
-from dual_rpm_pio_test import read_rpms, PIOQuadratureCounter
+from services.simple_pid import PID
+from services.dual_rpm_pio_test import read_rpms, PIOQuadratureCounter
+from services.robot_drive_controller import driverController
 
 # ----------------------------
 # Motor and Encoder Pin Setup
@@ -30,13 +31,13 @@ PID_KD = 0.01
 
 K_DELTA = 0.5  # Cross-coupling strength (tune this for best turning response)
 
-PID_OUTPUT_MIN = 5000
+PID_OUTPUT_MIN = 0
 PID_OUTPUT_MAX = 65535
 
 PWM_FREQ = 20000  # 20kHz for smooth Cytron MDD10A operation
 
 enc_right = PIOQuadratureCounter(0, 10, 11)
-enc_left = PIOQuadratureCounter(1, 12, 13)
+enc_left = PIOQuadratureCounter(1, 20, 21)
 
 
 # ----------------------------
@@ -95,8 +96,8 @@ def cross_coupled_pid_control(V, S):
     print("[Errors] Left: {:.2f}, Right: {:.2f}, Diff: {:.2f}".format(left_error, right_error, diff_error))
 
     # Set new setpoints for the PIDs (not just once at init)
-    pid_left.update_setpoint(left_set,50, 1500)
-    pid_right.update_setpoint(right_set,50, 1500)
+    pid_left.update_setpoint(left_set,50, 0)
+    pid_right.update_setpoint(right_set,50, 0)
 
     # Compute PID outputs
     left_pid_out = pid_left(measured_left)
@@ -126,26 +127,32 @@ def set_motor_output(pwm_value, pwm_obj, dir_obj,dir_value: int, label=""):
     dir_obj.value(dir_value)  # Set direction pin
     print("[{} Motor] PWM: {}, DIR: {}".format(label, pwm, "FWD" if dir_value ==1 else "REV"))
 
+def angle_to_steering(angle):
+    return angle / 90.0
 # ----------------------------
 # Main Control Loop
 # ----------------------------
 def main_control_loop():
     # Example input: V = 150 (RPM), S = 0.0 (straight)
-    V = 150          # Set as needed (RPM, or ticks/sec, etc.)
-    S = 0.8          # Steering: -1.0 to +1.0
-    NUM_STEPS = 50  # Number of control steps to run
+    # Set as needed (RPM, or ticks/sec, etc.)
+    # S = 0.8          # Steering: -1.0 to +1.0
+    NUM_STEPS = 500  # Number of control steps to run
     # Main loop (adjust timing/sample_time as needed)
-    init_pwm = 20000
+    # init_pwm = 20000
     # PWM_LEFT.duty_u16(init_pwm)  # Set initial PWM for left motor
     # PWM_RIGHT.duty_u16(init_pwm)  # Set initial PWM for right motor
 
     for step in range(NUM_STEPS):
+        navigation_params = driverController.get_navigation_params()
+        V = navigation_params.rpm
+        S = angle_to_steering(navigation_params.angle)  # Convert angle to steering
+
         # TODO: Replace V and S with your own command input system if needed
         left_pwm, right_pwm = cross_coupled_pid_control(V, S)
 
         # Apply to hardware
-        set_motor_output(right_pwm, PWM_RIGHT, DIR_RIGHT,1,"Right")
-        set_motor_output(left_pwm, PWM_LEFT, DIR_LEFT,1,"Left")
+        set_motor_output(right_pwm, PWM_RIGHT, DIR_RIGHT,0,"Right")
+        set_motor_output(left_pwm, PWM_LEFT, DIR_LEFT,0,"Left")
 
         # Loop at PID sample rate for stable control
         time.sleep(pid_left.sample_time)

@@ -1,7 +1,7 @@
 # track_auto_balance2.py
 import utime
 from machine import Pin, PWM
-from dual_rpm_pio_test import PIOQuadratureCounter, read_rpms
+from services.dual_rpm_pio_test import PIOQuadratureCounter, read_rpms
 
 def pid_control(
     target_rpm,
