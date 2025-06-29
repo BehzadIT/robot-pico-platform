@@ -145,4 +145,4 @@ def test_sync_tracks_full_speed(runtime_sec=5.0, update_interval=0.05):
 
 
 # === Run the test ===
-test_sync_tracks_full_speed(runtime_sec=5.0, update_interval=0.05)
+# test_sync_tracks_full_speed(runtime_sec=5.0, update_interval=0.05)

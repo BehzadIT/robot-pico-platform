@@ -10,10 +10,10 @@ from dual_rpm_pio_test import read_rpms, PIOQuadratureCounter
 # ----------------------------
 # Motor and Encoder Pin Setup
 # ----------------------------
-PWM_RIGHT = PWM(Pin(6))
-DIR_RIGHT = Pin(7, Pin.OUT)
-PWM_LEFT  = PWM(Pin(8))
-DIR_LEFT  = Pin(9, Pin.OUT)
+PWM_RIGHT = PWM(Pin(7))
+DIR_RIGHT = Pin(6, Pin.OUT)
+PWM_LEFT  = PWM(Pin(9))
+DIR_LEFT  = Pin(8, Pin.OUT)
 
 # Encoder pins are handled in your PIO-based RPM module.
 # Import your dual_rpm_pio_test module or ensure the following functions exist:
@@ -30,13 +30,13 @@ PID_KD = 0.01
 
 K_DELTA = 0.5  # Cross-coupling strength (tune this for best turning response)
 
-PID_OUTPUT_MIN = -65535
+PID_OUTPUT_MIN = 5000
 PID_OUTPUT_MAX = 65535
 
 PWM_FREQ = 20000  # 20kHz for smooth Cytron MDD10A operation
 
 enc_right = PIOQuadratureCounter(0, 10, 11)
-enc_left = PIOQuadratureCounter(1, 20, 21)
+enc_left = PIOQuadratureCounter(1, 12, 13)
 
 
 # ----------------------------
@@ -95,8 +95,8 @@ def cross_coupled_pid_control(V, S):
     print("[Errors] Left: {:.2f}, Right: {:.2f}, Diff: {:.2f}".format(left_error, right_error, diff_error))
 
     # Set new setpoints for the PIDs (not just once at init)
-    pid_left.setpoint = left_set
-    pid_right.setpoint = right_set
+    pid_left.update_setpoint(left_set,50, 1500)
+    pid_right.update_setpoint(right_set,50, 1500)
 
     # Compute PID outputs
     left_pid_out = pid_left(measured_left)
@@ -135,8 +135,9 @@ def main_control_loop():
     S = 0.8          # Steering: -1.0 to +1.0
     NUM_STEPS = 50  # Number of control steps to run
     # Main loop (adjust timing/sample_time as needed)
-    # PWM_LEFT.duty_u16(30000)  # Set initial PWM for left motor
-    # PWM_RIGHT.duty_u16(30000)  # Set initial PWM for right motor
+    init_pwm = 20000
+    # PWM_LEFT.duty_u16(init_pwm)  # Set initial PWM for left motor
+    # PWM_RIGHT.duty_u16(init_pwm)  # Set initial PWM for right motor
 
     for step in range(NUM_STEPS):
         # TODO: Replace V and S with your own command input system if needed
@@ -158,12 +159,12 @@ def main_control_loop():
 # ----------------------------
 # Run the main loop if file executed directly
 # ----------------------------
-if __name__ == "__main__":
-    try:
-        print("Starting Cross-Coupled PID Differential Drive Control...")
-        main_control_loop()
-    except KeyboardInterrupt:
-        print("Control loop stopped by user.")
-        # Optionally stop motors
-        PWM_RIGHT.duty_u16(0)
-        PWM_LEFT.duty_u16(0)
+# if __name__ == "__main__":
+#     try:
+#         print("Starting Cross-Coupled PID Differential Drive Control...")
+#         main_control_loop()
+#     except KeyboardInterrupt:
+#         print("Control loop stopped by user.")
+#         # Optionally stop motors
+#         PWM_RIGHT.duty_u16(0)
+#         PWM_LEFT.duty_u16(0)

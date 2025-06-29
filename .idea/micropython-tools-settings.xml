@@ -4,6 +4,6 @@
     <option name="increaseBaudrateForFileTransfers" value="false" />
     <option name="increasedFileTransferBaudrate" value="115200" />
     <option name="pluginEnabled" value="true" />
-    <option name="portName" value="/dev/ttyACM11" />
+    <option name="portName" value="/dev/ttyACM0" />
   </component>
 </project>

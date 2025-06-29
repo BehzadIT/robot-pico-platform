@@ -4,7 +4,7 @@ import time
 
 # Replace with your actual Wi-Fi credentials
 SSID = 'BIZI-HOME-24'
-PASSWORD = 'AUxHHs7#2V3DZwuVwkK5'
+PASSWORD = 'password123'
 
 # Connect to your router (station mode)
 wlan = network.WLAN(network.STA_IF)

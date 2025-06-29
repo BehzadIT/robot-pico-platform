@@ -172,40 +172,38 @@ def read_right_motor_rpm(interval_sec=0.05):
     return read_rpm(enc1, interval_sec, cpr=ENCODER_CPR, gear_ratio=GEAR_RATIO)
 
 # === Motor Pins ===
-PWM1 = PWM(Pin(6)); DIR1 = Pin(7, Pin.OUT)
-PWM2 = PWM(Pin(8)); DIR2 = Pin(9, Pin.OUT)
+PWM1 = PWM(Pin(7)); DIR1 = Pin(6, Pin.OUT)
+PWM2 = PWM(Pin(9)); DIR2 = Pin(8, Pin.OUT)
 PWM1.freq(1000); PWM2.freq(1000)
 
 # === Encoder Instances ===
 
+def start_test(run_time_secs=5):
+    PWM_MAX = 65535  # Max duty cycle for PWM
+    DIR1.value(0)
+    DIR2.value(0)
+    PWM1.duty_u16(PWM_MAX)
+    PWM2.duty_u16(PWM_MAX)
 
+    print("Running motors and measuring RPM using PIO encoder...")
+    utime.sleep(run_time_secs)
 
-# === Start Motors ===
-DIR1.value(1); DIR2.value(1)
-PWM1.duty_u16(65535); PWM2.duty_u16(65535)
+    PWM1.duty_u16(0)
+    PWM2.duty_u16(0)
 
-print("Running motors and measuring RPM using PIO encoder...")
-utime.sleep(1.0)
+    # === Read and Reset Encoder Ticks ===
+    ticks1 = enc1.read(); enc1.set_zero()
+    ticks2 = enc2.read(); enc2.set_zero()
 
-PWM1.duty_u16(0)
-PWM2.duty_u16(0)
+    motor_rpm1 = (ticks1 / ENCODER_CPR) * (60 / run_time_secs)
+    motor_rpm2 = (ticks2 / ENCODER_CPR) * (60 / run_time_secs)
+    output_rpm1 = motor_rpm1 / GEAR_RATIO
+    output_rpm2 = motor_rpm2 / GEAR_RATIO
 
-# === Read and Reset Encoder Ticks ===
-ticks1 = enc1.read(); enc1.set_zero()
-ticks2 = enc2.read(); enc2.set_zero()
+    print("\n=== FINAL RPM RESULTS (WITH RESET) ===")
+    print(f"Motor 1: Ticks={ticks1}, Motor RPM={motor_rpm1:.1f}, Output RPM={output_rpm1:.1f}")
+    print(f"Motor 2: Ticks={ticks2}, Motor RPM={motor_rpm2:.1f}, Output RPM={output_rpm2:.1f}")
 
-motor_rpm1 = (ticks1 / ENCODER_CPR) * 60
-motor_rpm2 = (ticks2 / ENCODER_CPR) * 60
-output_rpm1 = motor_rpm1 / GEAR_RATIO
-output_rpm2 = motor_rpm2 / GEAR_RATIO
-
-# === Display Results ===
-print("\n=== FINAL RPM RESULTS (WITH RESET) ===")
-print(f"Motor 1: Ticks={ticks1}, Motor RPM={motor_rpm1:.1f}, Output RPM={output_rpm1:.1f}")
-print(f"Motor 2: Ticks={ticks2}, Motor RPM={motor_rpm2:.1f}, Output RPM={output_rpm2:.1f}")
-
-# === Clean Up ===
-enc1.deinit()
-enc2.deinit()
-gc.collect()
-
+    enc1.deinit()
+    enc2.deinit()
+    gc.collect()

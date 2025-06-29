@@ -1,5 +1,6 @@
 import utime
 
+
 def _clamp(value, limits):
     lower, upper = limits
     if value is None:
@@ -10,21 +11,22 @@ def _clamp(value, limits):
         return lower
     return value
 
+
 class PID(object):
     """A simple PID controller."""
 
     def __init__(
-        self,
-        Kp=1.0,
-        Ki=0.0,
-        Kd=0.0,
-        setpoint=0,
-        sample_time=None,
-        scale='s',
-        output_limits=[None, None],
-        auto_mode=True,
-        proportional_on_measurement=False,
-        error_map=None
+            self,
+            Kp=1.0,
+            Ki=0.0,
+            Kd=0.0,
+            setpoint=0,
+            sample_time=None,
+            scale='s',
+            output_limits=[None, None],
+            auto_mode=True,
+            proportional_on_measurement=False,
+            error_map=None
     ):
         """
         Initialize a new PID controller.
@@ -58,22 +60,24 @@ class PID(object):
 
         def get_scale(x):
             return {
-                's' : 'time',
+                's': 'time',
                 'ms': 'ticks_ms',
                 'us': 'ticks_us',
                 'ns': 'time_ns',
-                'cpu':'ticks_cpu'
-            }.get(x, 'time') # seconds is default if x is not found
+                'cpu': 'ticks_cpu'
+            }.get(x, 'time')  # seconds is default if x is not found
+
         self.scale = get_scale(scale)
 
         def get_unit(x):
             return {
-                's' : 1,
+                's': 1,
                 'ms': 1e-3,
                 'us': 1e-6,
                 'ns': 1e-9,
-                'cpu':1
-            }.get(x, 1) # tunings should be explicitly defined at 'ticks_cpu'
+                'cpu': 1
+            }.get(x, 1)  # tunings should be explicitly defined at 'ticks_cpu'
+
         self.unit = get_unit(scale)
 
         if hasattr(utime, self.scale) and callable(func := getattr(utime, self.scale)):
@@ -86,11 +90,15 @@ class PID(object):
 
         self._proportional = 0
         self._integral = 0
+        self._aggressive_integral = 0
         self._derivative = 0
 
         self._last_time = None
         self._last_output = None
         self._last_input = None
+
+        self.setpoint_change_start_time = None
+        self.disable_integral_timeout_ms = None
 
         self.output_limits = output_limits
         self.reset()
@@ -111,7 +119,7 @@ class PID(object):
 
         now = self.time()
         if dt is None:
-            dt = utime.ticks_diff(now,self._last_time) if (utime.ticks_diff(now,self._last_time)) else 1e-16
+            dt = utime.ticks_diff(now, self._last_time) if (utime.ticks_diff(now, self._last_time)) else 1e-16
         elif dt <= 0:
             raise ValueError('dt has negative value {}, must be positive'.format(dt))
 
@@ -135,14 +143,34 @@ class PID(object):
             # Add the proportional error on measurement to error_sum
             self._proportional -= self.Kp * self.unit * d_input
 
+        update_integral = True
+        if self.disable_integral_timeout_ms is not None and self.setpoint_change_start_time is not None:
+            # Check if the setpoint has changed and if the integral should be disabled
+            time_passed_since_change = utime.ticks_diff(utime.ticks_ms(), self.setpoint_change_start_time)
+            if time_passed_since_change <= self.disable_integral_timeout_ms:
+                print(f"{time_passed_since_change} ms is left from setpoint change timeout, integral will not be updated.")
+                update_integral = False
+                print("Integral will not be updated since still in setpoint change timeout.")
+            else:
+                self.disable_integral_timeout_ms = None
+
+
         # Compute integral and derivative terms
-        self._integral += (self.Ki * self.unit) * error * dt
-        self._integral = _clamp(self._integral, self.output_limits)  # Avoid integral windup
+        if update_integral:
+            updated_integral = self._integral + (self.Ki * self.unit) * error * dt
+            updated_integral = _clamp(updated_integral, self.output_limits)  # Avoid integral windup
+            self._integral = updated_integral
+            self._aggressive_integral = updated_integral  # align with the regular integral term
+            output = self._proportional + updated_integral + self._derivative
+        else:
+            updated_integral = self._aggressive_integral + (self.Ki * self.unit) * error * dt
+            updated_integral = _clamp(updated_integral, self.output_limits)  # Avoid integral windup
+            self._aggressive_integral = updated_integral
+            output = self._proportional + updated_integral + self._derivative
 
         self._derivative = -(self.Kd / self.unit) * d_input / dt
 
         # Compute final output
-        output = self._proportional + self._integral + self._derivative
         output = _clamp(output, self.output_limits)
 
         # Keep track of state
@@ -190,6 +218,21 @@ class PID(object):
     def auto_mode(self, enabled):
         """Enable or disable the PID controller."""
         self.set_auto_mode(enabled)
+
+    def update_setpoint(self, updated_setpoint, setpoint_jump_to_disable_integral: int = None,
+                        disable_integral_timeout_ms: int = None):
+        # If the setpoint has jumped more than the threshold, disable integral
+        if abs(self.setpoint - updated_setpoint) > setpoint_jump_to_disable_integral:
+            if(self.disable_integral_timeout_ms is not None):
+                print("Already in setpoint change timeout, will not start a new timeout.")
+            else:
+                self.setpoint_change_start_time = utime.ticks_ms()
+                self.disable_integral_timeout_ms = disable_integral_timeout_ms
+                print("Setpoint jumped more than threshold, disabling integral for the timeout period.")
+        # else:
+        #     self.disable_integral_timeout_ms = None
+
+        self.setpoint = updated_setpoint
 
     def set_auto_mode(self, enabled, last_output=None):
         """
