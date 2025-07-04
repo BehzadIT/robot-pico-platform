@@ -1,10 +1,12 @@
+from server.routes.request_models import ApiDriveRequest
 from services.robot_drive_controller import driverController
 
-def init(app):
 
-    @app.route('/forward')
-    def forward(request):
-        driverController.drive(100, direction=0)  # Forward at 100 RPM
+def init(app):
+    @app.put('/drive')
+    def drive(request):
+        drive_request = ApiDriveRequest(request.json)
+        driverController.drive(drive_request)  # Forward at 100 RPM
         # motor_control.forward()
         # state.set_speed(100)
         return {'status': 'moving forward'}

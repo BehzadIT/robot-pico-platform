@@ -30,6 +30,7 @@ class PID(object):
             sample_time: Optional[float] = ...,
             scale: Optional[str],
             output_limits: _Limits = ...,
+            integral_limits: _Limits = ...,
             auto_mode: bool = ...,
             proportional_on_measurement: bool = ...,
             error_map: Optional[Callable[[float], float]] = ...,
@@ -56,13 +57,18 @@ class PID(object):
 
     def set_auto_mode(self, enabled: bool, last_output: Optional[float] = ...) -> None: ...
 
-    def update_setpoint(self, updated_setpoint, setpoint_jump_to_disable_integral: int,
-                        disable_integral_timeout_ms: int) -> None: ...
+    def update_setpoint(self, updated_setpoint) -> None: ...
 
     @property
     def output_limits(self) -> _Limits: ...
 
     @output_limits.setter
     def output_limits(self, limits: _Limits) -> None: ...
+
+    @property
+    def integral_limits(self) -> _Limits: ...
+
+    @integral_limits.setter
+    def integral_limits(self, limits: _Limits) -> None: ...
 
     def reset(self) -> None: ...
