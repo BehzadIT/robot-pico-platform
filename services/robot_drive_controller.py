@@ -1,6 +1,7 @@
 import utime
 import _thread
 from server.routes.request_models import ApiDriveRequest
+from services.robot_cross_coupled_pid import robot_pid
 
 nav_lock = _thread.allocate_lock()
 
@@ -14,13 +15,12 @@ class RobotNavigationController:
         # Direction: 0 for forward, 1 for reverse
         self._target_direction = 0
         self._last_command_time = utime.ticks_ms()
-        self._stop = False
         # Add other PID state vars here if you wish
 
     # Exposed public API
     def drive(self, drive_request: ApiDriveRequest):
         with nav_lock:
-            self._stop = False
+            robot_pid.start(driverController)
             self._target_rpm = drive_request.target_rpm
             self._target_direction = drive_request.target_direction
             self._last_command_time = utime.ticks_ms()
@@ -32,9 +32,7 @@ class RobotNavigationController:
 
     def stop(self):
         with nav_lock:
-            from services.robot_cross_coupled_pid import terminate_thread
-            terminate_thread()
-            self._stop = True
+            robot_pid.terminate_thread()
             print("Stop command received")
             self._target_rpm = 0
             self._last_command_time = utime.ticks_ms()
@@ -45,8 +43,7 @@ class RobotNavigationController:
             return NavigationParams(
                 self._target_rpm,
                 self._target_angle,
-                self._target_direction,
-                self._stop)
+                self._target_direction)
 
     def is_timeout(self, timeout_ms=2000):
         with nav_lock:
@@ -58,11 +55,10 @@ driverController = RobotNavigationController()
 
 
 class NavigationParams:
-    def __init__(self, rpm, angle, direction, stop):
+    def __init__(self, rpm, angle, direction):
         self.target_rpm = rpm
         self.target_angle = angle
         self.target_direction = direction
-        self.stop = stop
 
     def get_signed_target_rpm(self):
         if self.target_direction == 0:
