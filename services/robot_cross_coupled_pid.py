@@ -42,10 +42,10 @@ class RobotPID:
     PID_KD = 0
 
     K_DELTA = 0.5  # Cross-coupling strength (affects turn sharpness)
-    PID_OUTPUT_MIN = 0.0
-    PID_OUTPUT_MAX = 1.0
-    PID_INTEGRAL_MIN = 0.0
-    PID_INTEGRAL_MAX = 1.0
+    PID_OUTPUT_MIN = 0.0    # Minimum PID output (0% power)
+    PID_OUTPUT_MAX = 1.0    # Maximum PID output (100% power)
+    PID_INTEGRAL_MIN = 0.0  # Minimum integral term
+    PID_INTEGRAL_MAX = 1.0  # Maximum integral term
     PWM_FREQ = 20000  # 20kHz = silent and efficient on Cytron
 
     OSCILLATION_THRESHOLD = 10000  # Used in TEST_MODE for stability testing
@@ -99,12 +99,15 @@ class RobotPID:
         _thread.start_new_thread(self.main_control_loop, (navigation_controller,))
 
     def normalize_rpm(self, rpm):
-        """Normalize RPM for PID [0.0, 1.0]."""
-        return (rpm - self.RPM_MIN) / (self.RPM_MAX - self.RPM_MIN)
+        """Normalize RPM for PID [-1.0, 1.0] where negative is reverse."""
+        return rpm / self.RPM_MAX  # This will give us a range of [-1.0, 1.0]
 
     def denormalize_pwm(self, norm):
-        """Convert normalized PID output [0,1] to actual hardware PWM."""
-        return int(self.PWM_MIN + norm * (self.PWM_MAX - self.PWM_MIN))
+        """Convert normalized PID output to actual hardware PWM, preserving sign."""
+        pwm_range = self.PWM_MAX - self.PWM_MIN
+        if norm < 0:
+            return -int(self.PWM_MIN + abs(norm) * pwm_range)
+        return int(self.PWM_MIN + norm * pwm_range)
 
     def calculate_setpoints(self, norm_velocity, turning_angle):
         """
@@ -132,72 +135,106 @@ class RobotPID:
 
     def cross_coupled_pid_control(self, signed_rpm_setpoint: int, turning_angle: float):
         """
-        Core PID logic:
-        - Converts navigation setpoint + steering to normalized left/right setpoints.
-        - Reads actual RPMs.
-        - Calculates PID output for each motor.
-        - Optionally logs/flags oscillation in test_mode.
+        Run one iteration of the cross-coupled PID control.
+        - signed_rpm_setpoint: desired RPM (positive for forward, negative for reverse)
+        - turning_angle: desired turning angle (in degrees)
         Returns (left_pwm, right_pwm, oscillation_detected, target_reached)
         """
-        norm_velocity = self.normalize_rpm(signed_rpm_setpoint)
-        self.log("Setpoint: RPM=%d, Angle=%.2f", signed_rpm_setpoint, turning_angle)
+        # Determine direction and use absolute RPM for calculations
+        direction = -1 if signed_rpm_setpoint < 0 else 1
+        abs_rpm = abs(signed_rpm_setpoint)
+
+        # Log input parameters
+        self.log("\n[PID] New Control Cycle - RPM: %d (%s), Angle: %.2f",
+                 abs_rpm, "REVERSE" if direction < 0 else "FORWARD", turning_angle)
+
+        # Normalize RPM (0.0 to 1.0)
+        norm_velocity = self.normalize_rpm(abs_rpm)
+        self.log("  Normalized Velocity: %.2f (RPM: %d)", norm_velocity, abs_rpm)
+
+        # Calculate setpoints (0.0 to 1.0)
         left_set, right_set = self.calculate_setpoints(norm_velocity, turning_angle)
+        self.log("  Setpoints - Left: %.3f, Right: %.3f", left_set, right_set)
 
+        # Read actual RPMs and normalize (take absolute value for PID)
         measured_left, measured_right = self.read_rpms_pio()
-        norm_measured_left = self.normalize_rpm(measured_left)
-        norm_measured_right = self.normalize_rpm(measured_right)
+        abs_measured_left = abs(measured_left)
+        abs_measured_right = abs(measured_right)
+        norm_measured_left = self.normalize_rpm(abs_measured_left)
+        norm_measured_right = self.normalize_rpm(abs_measured_right)
 
+        self.log("  Measured RPMs - Left: %.1f (abs: %.1f, norm: %.3f), Right: %.1f (abs: %.1f, norm: %.3f)",
+                 measured_left, abs_measured_left, norm_measured_left,
+                 measured_right, abs_measured_right, norm_measured_right)
+
+        # Calculate errors (use absolute values)
         left_error = left_set - norm_measured_left
         right_error = right_set - norm_measured_right
-        desired_diff = right_set - left_set
-        actual_diff = norm_measured_right - norm_measured_left
-        diff_error = desired_diff - actual_diff
+        self.log("  Errors - Left: %.3f, Right: %.3f", left_error, right_error)
 
-        self.log("PID Errors: Left=%.2f, Right=%.2f, Diff=%.2f", left_error, right_error, diff_error)
-
+        # Update PID setpoints
         self.pid_left.setpoint = left_set
         self.pid_right.setpoint = right_set
 
+        # Get PID outputs (0.0 to 1.0)
         left_pid_out = self.pid_left(norm_measured_left)
         right_pid_out = self.pid_right(norm_measured_right)
+        self.log("  PID Outputs - Left: %.3f, Right: %.3f", left_pid_out, right_pid_out)
 
-        self.log("PID Out: Left=%.3f, Right=%.3f", left_pid_out, right_pid_out)
+        # Convert to PWM and apply direction
+        left_pwm = int(self.denormalize_pwm(left_pid_out)) * direction
+        right_pwm = int(self.denormalize_pwm(right_pid_out)) * direction
 
-        left_pwm = int(self.clamp(self.denormalize_pwm(left_pid_out), self.PWM_MIN, self.PWM_MAX))
-        right_pwm = int(self.clamp(self.denormalize_pwm(right_pid_out), self.PWM_MIN, self.PWM_MAX))
+        # Clamp to valid PWM range
+        left_pwm = int(self.clamp(left_pwm, -65535, 65535))
+        right_pwm = int(self.clamp(right_pwm, -65535, 65535))
 
-        # Oscillation detection (optional, for test/debug only)
+        self.log("  Final PWM - Left: %d, Right: %d", left_pwm, right_pwm)
+
+        # Rest of the method remains the same...
         oscillation_detected = False
         target_reached = False
+
         if self.test_mode:
-            if self.prev_pwm_left is not None and (left_pwm < self.prev_pwm_left - self.OSCILLATION_THRESHOLD):
+            if self.prev_pwm_left is not None and (
+                    abs(left_pwm) < abs(self.prev_pwm_left) - self.OSCILLATION_THRESHOLD):
                 oscillation_detected = True
-                self.log("Oscillation detected! Left PWM dropped.")
-            if self.prev_pwm_right is not None and (right_pwm < self.prev_pwm_right - self.OSCILLATION_THRESHOLD):
+                self.log("  Oscillation detected! Left PWM dropped.")
+            if self.prev_pwm_right is not None and (
+                    abs(right_pwm) < abs(self.prev_pwm_right) - self.OSCILLATION_THRESHOLD):
                 oscillation_detected = True
-                self.log("Oscillation detected! Right PWM dropped.")
-            if (measured_left > (abs(signed_rpm_setpoint) - abs(signed_rpm_setpoint) * 0.05)
-                    and measured_right > (abs(signed_rpm_setpoint) - abs(signed_rpm_setpoint) * 0.05)):
+                self.log("  Oscillation detected! Right PWM dropped.")
+            if (abs_measured_left > (abs_rpm - abs_rpm * 0.05)
+                    and abs_measured_right > (abs_rpm - abs_rpm * 0.05)):
                 target_reached = True
 
         self.prev_pwm_left = left_pwm
         self.prev_pwm_right = right_pwm
-
-        self.log("PWM Output: Left=%d, Right=%d", left_pwm, right_pwm)
 
         return left_pwm, right_pwm, oscillation_detected, target_reached
 
     def set_motor_output(self, pwm_value, pwm_obj, dir_obj, dir_value: int, label=""):
         """
         Set Cytron MDD10A motor channel PWM and direction.
-        - pwm_value: 0..65535
+        - pwm_value: signed value where sign indicates direction
         - dir_value: 0=reverse, 1=forward (match your wiring/robot logic)
         """
+        # Determine direction based on sign of pwm_value
+        if pwm_value < 0:
+            dir_value = 1  # Reverse direction
+            pwm_value = abs(pwm_value)  # PWM is always positive
+        else:
+            dir_value = 0  # Forward direction
+
+        # Apply deadband and ensure we're within PWM limits
+        if abs(pwm_value) < self.PWM_MIN:
+            pwm_value = 0
+            
         pwm = int(self.clamp(pwm_value, 0, 65535))
         pwm_obj.freq(self.PWM_FREQ)
         pwm_obj.duty_u16(pwm)
         dir_obj.value(dir_value)
-        self.log("%s Motor: PWM=%d, DIR=%s", label, pwm, "FWD" if dir_value == 1 else "REV")
+        self.log("%s Motor: PWM=%d, DIR=%s", label, pwm, "FWD" if dir_value == 0 else "REV")
 
     def stop_motors(self):
         """

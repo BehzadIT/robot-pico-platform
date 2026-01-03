@@ -19,11 +19,14 @@ def _safe_uart_write(s: str):
     """Write to UART; swallow all errors and auto-disable if it keeps failing."""
     global _fail_count, _mirroring_enabled
     try:
-        # Ensure it's bytes; MicroPython will usually accept str, but this is safer
-        if isinstance(s, str):
-            s = s.encode()  # default utf-8
-        uart.write(s)  # may raise if UART not ready/absent
-        _fail_count = 0  # success → reset counter
+        if isinstance(s, bytes):
+            # Reject raw binary explicitly
+            s = s.decode("utf-8", errors="replace").encode("utf-8")
+        else:
+            s = str(s).encode("utf-8")
+
+        uart.write(s)
+        _fail_count = 0
     except Exception as e:
         _fail_count += 1
         if _fail_count == 1:
