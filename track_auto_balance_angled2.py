@@ -38,10 +38,11 @@ def pid_control(
     pwm = int(max(min_pwm, min(output, max_pwm)))
 
     # Apply minimum PWM threshold for movement
+    from log import logd
     if abs(target_rpm) > 1.0 and abs(pwm) < min_start_pwm:
         pwm = min_start_pwm if pwm >= 0 else -min_start_pwm
 
-    print(
+    logd(
         f"[{label}] Target: {target_rpm:.2f}, Measured: {measured_rpm:.2f}, Error: {error:.2f}, "
         f"Int: {integral:.2f} ({integral_locked}), Deriv: {derivative:.2f}, "
         f"PID: {output:.0f}, PWM: {pwm}"
@@ -160,16 +161,17 @@ if __name__ == "__main__":
             integral_right = integral_outer
 
         # Apply PWM
+        from log import logi, logd
         PWM1.duty_u16(int(pwm_right))
         PWM2.duty_u16(int(pwm_left))
 
-        print(
+        logd(
             f"Step {step:3d} | ANGLE: {ANGLE:.1f} | OUTER ({label_outer.split('-')[1]}): rpm={measured_rpm_outer:.2f} | "
             f"INNER ({label_inner.split('-')[1]}): rpm={measured_rpm_inner:.2f} | Scale: {1 - abs(ANGLE)/90:.2f}"
         )
         utime.sleep(UPDATE_INTERVAL)
 
-    print("Done. Stopping motors.")
+    logi("Done. Stopping motors.")
     PWM1.duty_u16(0)
     PWM2.duty_u16(0)
 

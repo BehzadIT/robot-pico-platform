@@ -1,5 +1,6 @@
 import utime
 import _thread
+from log import *
 from server.routes.request_models import ApiDriveRequest
 from services.robot_cross_coupled_pid import robot_pid
 
@@ -33,7 +34,7 @@ class RobotNavigationController:
     def stop(self):
         with nav_lock:
             robot_pid.terminate_thread()
-            print("Stop command received")
+            logd("Stop command received")
             self._target_rpm = 0
             self._last_command_time = utime.ticks_ms()
 

@@ -5,6 +5,7 @@
 
 from machine import Pin, PWM
 import time
+from log import *
 from services.simple_pid import PID
 from services.dual_rpm_pio_test import read_rpms, PIOQuadratureCounter
 
@@ -79,9 +80,10 @@ class RobotPID:
     def log(msg, *args):
         """Uniform log output for PID and hardware events."""
         try:
-            print("[PID] " + (msg % args if args else msg))
-        except Exception:
-            print("[PID]", msg)
+            logd("[PID] " + (msg % args if args else msg))
+        except Exception as e:
+            logw(f"[PID] Error logging message: {e}")
+            logd(f"[PID] {msg}")
 
     @staticmethod
     def clamp(val, min_val, max_val):

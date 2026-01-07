@@ -54,10 +54,11 @@ def print_rpm(timer):
     pos1 = 0
     pos2 = 0
 
+    from log import logd
     rpm1 = (ticks1 / COUNTS_PER_REV) * 60000 / dt if dt > 0 else 0
     rpm2 = (ticks2 / COUNTS_PER_REV) * 60000 / dt if dt > 0 else 0
 
-    print("Motor 1 RPM:", round(rpm1, 2), "| Motor 2 RPM:", round(rpm2, 2))
+    logd(f"Motor 1 RPM: {round(rpm1, 2)} | Motor 2 RPM: {round(rpm2, 2)}")
 
 # === Start timer at 2 Hz (every 0.5s) ===
 rpm_timer = Timer()

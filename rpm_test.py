@@ -44,8 +44,10 @@ def update_encoder(pin):
 A.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=update_encoder)
 B.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=update_encoder)
 
+from log import *
+
 # === TEST RUN ===
-print("Running motor at full speed for 1 second...")
+logi("Running motor at full speed for 1 second...")
 ticks = 0
 start_time = time.ticks_ms()
 time.sleep(1.0)
@@ -60,8 +62,8 @@ motor_rpm = revs / (elapsed / 60000)
 output_rpm = motor_rpm / GEAR_RATIO
 
 # === REPORT RESULTS ===
-print("\n=== RPM TEST RESULTS ===")
-print(f"Ticks counted:      {ticks}")
-print(f"Elapsed time (ms):  {elapsed}")
-print(f"Motor RPM:          {motor_rpm:.1f}")
-print(f"Output Shaft RPM:   {output_rpm:.1f}")
+logi("\n=== RPM TEST RESULTS ===")
+logd(f"Ticks counted:      {ticks}")
+logd(f"Elapsed time (ms):  {elapsed}")
+logi(f"Motor RPM:          {motor_rpm:.1f}")
+logi(f"Output Shaft RPM:   {output_rpm:.1f}")

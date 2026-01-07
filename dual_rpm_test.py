@@ -1,5 +1,6 @@
 from machine import Pin, PWM
 import time
+from log import *
 
 # === Constants ===
 ENCODER_CPR = 64
@@ -43,7 +44,7 @@ A1.irq(trigger=Pin.IRQ_RISING, handler=update_encoder1)
 A2.irq(trigger=Pin.IRQ_RISING, handler=update_encoder2)
 
 # === Run Test ===
-print("Running both motors at full speed for 1 second...")
+logi("Running both motors at full speed for 1 second...")
 ticks1 = 0
 ticks2 = 0
 start = time.ticks_ms()
@@ -62,6 +63,6 @@ output_rpm1 = motor_rpm1 / GEAR_RATIO
 output_rpm2 = motor_rpm2 / GEAR_RATIO
 
 # === Display Results ===
-print("\n=== DUAL MOTOR RPM TEST RESULTS (1x DECODING) ===")
-print(f"Motor 1: Ticks={ticks1}, Motor RPM={motor_rpm1:.1f}, Output RPM={output_rpm1:.1f}")
-print(f"Motor 2: Ticks={ticks2}, Motor RPM={motor_rpm2:.1f}, Output RPM={output_rpm2:.1f}")
+logi("\n=== DUAL MOTOR RPM TEST RESULTS (1x DECODING) ===")
+logd(f"Motor 1: Ticks={ticks1}, Motor RPM={motor_rpm1:.1f}, Output RPM={output_rpm1:.1f}")
+logd(f"Motor 2: Ticks={ticks2}, Motor RPM={motor_rpm2:.1f}, Output RPM={output_rpm2:.1f}")

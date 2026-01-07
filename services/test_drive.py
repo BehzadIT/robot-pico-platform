@@ -1,4 +1,6 @@
+import utime
 from machine import Pin, PWM
+from log import *
 import time
 
 # === Motor driver PWM & direction pins ===
@@ -95,7 +97,7 @@ def test_sync_tracks_full_speed(runtime_sec=5.0, update_interval=0.05):
     pwm_left = 65535
     pwm_right = 65535
     start_time = time.ticks_ms()
-    print("Starting test: 5s at full speed with track synchronization.")
+    logi("Starting test: 5s at full speed with track synchronization.")
 
     global ticks_left, ticks_right  # So we can access these
 
@@ -128,8 +130,8 @@ def test_sync_tracks_full_speed(runtime_sec=5.0, update_interval=0.05):
         PWM2.duty_u16(pwm_left)
         PWM1.duty_u16(pwm_right)
 
-        # Print out all info, with precise RPMs and delta
-        print(
+        # Log all info, with precise RPMs and delta
+        logd(
             "Time: {:.2f}s | PWM L: {:5d} | RPM L: {:8.3f} | "
             "PWM R: {:5d} | RPM R: {:8.3f} | Delta RPM (L-R): {:+8.3f}".format(
                 time.ticks_diff(time.ticks_ms(), start_time) / 1000,
@@ -139,7 +141,7 @@ def test_sync_tracks_full_speed(runtime_sec=5.0, update_interval=0.05):
             )
         )
 
-    print("Test complete. Stopping motors.")
+    logi("Test complete. Stopping motors.")
     PWM1.duty_u16(0)
     PWM2.duty_u16(0)
 

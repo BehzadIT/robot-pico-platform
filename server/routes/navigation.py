@@ -1,27 +1,28 @@
 from server.routes.request_models import ApiDriveRequest
 from services.robot_drive_controller import driverController
 from lib.websockets import with_websocket
+from log import *
 import ujson
 
 def init(app):
     @app.route('/ws')
     @with_websocket
     async def ws_handler(request, ws):
-        print("WebSocket client connected")
+        logd("WebSocket client connected")
         try:
             while True:
                 msg = await ws.receive()
                 if msg is None:
                     break  # Client disconnected
 
-                print('Received via WebSocket:', msg)
-                print('Type of msg:', type(msg))
+                logd(f'Received via WebSocket: {msg}')
+                logd(f'Type of msg: {type(msg)}')
                 try:
                     data = ujson.loads(msg)
                 except Exception:
                     await ws.send(ujson.dumps({'error': 'invalid_json'}))
                     continue
-                print('type of drive:', data.get("type"))
+                logd(f'type of drive: {data.get("type")}')
 
                 # Handle 'drive' command
                 if data.get("type") == "drive":
@@ -41,8 +42,8 @@ def init(app):
                 else:
                     await ws.send(ujson.dumps({'error': 'unknown_command'}))
         except Exception as e:
-            print('WebSocket error:', e)
-        print("WebSocket client disconnected")
+            loge(f'WebSocket error: {e}')
+        logd("WebSocket client disconnected")
 
     # Existing HTTP endpoints (unchanged)
     @app.put('/drive')

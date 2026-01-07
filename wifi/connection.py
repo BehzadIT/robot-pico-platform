@@ -1,7 +1,7 @@
 import network
 import time
 import sys
-from logger_uart import logd
+from log import *
 
 # Add parent directory to path to import config
 sys.path.append('..')

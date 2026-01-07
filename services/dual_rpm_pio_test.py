@@ -5,6 +5,7 @@ import rp2
 from machine import Pin, PWM
 import array
 import gc
+from log import *
 
 # base on official Raspberry Pi Pico PIO example for quadrature encoder counting
 # https://github.com/raspberrypi/pico-examples/blob/master/pio/quadrature_encoder/quadrature_encoder.pio
@@ -185,7 +186,7 @@ def start_test(run_time_secs=5):
     PWM1.duty_u16(PWM_MAX)
     PWM2.duty_u16(PWM_MAX)
 
-    print("Running motors and measuring RPM using PIO encoder...")
+    logi("Running motors and measuring RPM using PIO encoder...")
     utime.sleep(run_time_secs)
 
     PWM1.duty_u16(0)
@@ -200,9 +201,9 @@ def start_test(run_time_secs=5):
     output_rpm1 = motor_rpm1 / GEAR_RATIO
     output_rpm2 = motor_rpm2 / GEAR_RATIO
 
-    print("\n=== FINAL RPM RESULTS (WITH RESET) ===")
-    print(f"Motor 1: Ticks={ticks1}, Motor RPM={motor_rpm1:.1f}, Output RPM={output_rpm1:.1f}")
-    print(f"Motor 2: Ticks={ticks2}, Motor RPM={motor_rpm2:.1f}, Output RPM={output_rpm2:.1f}")
+    logi("\n=== FINAL RPM RESULTS (WITH RESET) ===")
+    logd(f"Motor 1: Ticks={ticks1}, Motor RPM={motor_rpm1:.1f}, Output RPM={output_rpm1:.1f}")
+    logd(f"Motor 2: Ticks={ticks2}, Motor RPM={motor_rpm2:.1f}, Output RPM={output_rpm2:.1f}")
 
     enc1.deinit()
     enc2.deinit()

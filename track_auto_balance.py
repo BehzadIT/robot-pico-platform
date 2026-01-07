@@ -1,5 +1,6 @@
 # track_auto_balance.py
 
+from log import *
 from machine import Pin, PWM
 from services.dual_rpm_pio_test import PIOQuadratureCounter, read_rpms
 
@@ -118,7 +119,7 @@ if __name__ == "__main__":
     duration_sec = 5
     update_interval = 0.05  # 50ms = 20Hz
     steps = int(duration_sec / update_interval)
-    print("Starting auto-balance loop for {} seconds...".format(duration_sec))
+    logi("Starting auto-balance loop for {} seconds...".format(duration_sec))
 
     for step in range(steps):
         measured_rpm_right, measured_rpm_left = read_rpms(enc_right, enc_left, interval_sec=update_interval)
@@ -134,7 +135,7 @@ if __name__ == "__main__":
         PWM1.duty_u16(int(pwm_right))
         PWM2.duty_u16(int(pwm_left))
 
-        print(
+        logd(
             "Step {:3d} | PWM L: {:5d} | RPM L: {:8.2f} | PWM R: {:5d} | RPM R: {:8.2f} | "
             "Delta (L-R): {:+7.2f} | Corr L: {:+5d} | Corr R: {:+5d}".format(
                 step, pwm_left, measured_rpm_left, pwm_right, measured_rpm_right,
@@ -144,7 +145,7 @@ if __name__ == "__main__":
         )
 
 
-    print("Done. Stopping motors.")
+    logi("Done. Stopping motors.")
     PWM1.duty_u16(0)
     PWM2.duty_u16(0)
 

@@ -2,6 +2,7 @@
 import utime
 from machine import Pin, PWM
 from services.dual_rpm_pio_test import PIOQuadratureCounter, read_rpms
+from log import *
 
 def sync_tracks_pid(
     measured_rpm_left,
@@ -104,8 +105,9 @@ if __name__ == "__main__":
         )
         PWM1.duty_u16(int(pwm_left))
         PWM2.duty_u16(int(pwm_right))
+        from log import *
         lock_str = f" | Integral lock: {integral_locked.upper()}" if integral_locked else ""
-        print(
+        logd(
             f"Step {step:3d} | RPM L/R: {measured_rpm_left:7.2f}/{measured_rpm_right:7.2f} | "
             f"Error (L-R): {error:7.2f} | Correction: {correction:6d} | Deriv: {derivative:7.2f} | "
             f"Integral: {integral:8.2f} | PWM L/R: {pwm_left:5d}/{pwm_right:5d} | "
@@ -113,7 +115,8 @@ if __name__ == "__main__":
         )
         utime.sleep(UPDATE_INTERVAL)
 
-    print("Done. Stopping motors.")
+    from log import *
+    logi("Done. Stopping motors.")
     PWM1.duty_u16(0)
     PWM2.duty_u16(0)
     enc_right.deinit()
