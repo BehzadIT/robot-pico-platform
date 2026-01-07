@@ -144,9 +144,15 @@ def _log(level: str, tag: str, msg: str) -> None:
     else:
         line = f"{level} ({_ticks()}) {msg}\n"
 
+    # UART (with color)
     color = _COLORS.get(level, "")
-    _uart_write_bytes(f"{color}{line}{_RESET}".encode("utf-8"))
+    reset = _RESET
 
+    # 1) UART output
+    _uart_write_bytes(f"{color}{line}\n{reset}".encode("utf-8"))
+
+    # 2) USB REPL output (NO implicit newline)
+    _orig_print(f"{color}{line}{reset}", end="")
 
 # ======================================================
 # Public logging helpers
