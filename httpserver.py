@@ -2,14 +2,13 @@ import network
 import socket
 import time
 
-# Replace with your actual Wi-Fi credentials
-SSID = 'BIZI-HOME-24'
-PASSWORD = 'password123'
+# Import config
+from config import WIFI_CONFIG
 
 # Connect to your router (station mode)
 wlan = network.WLAN(network.STA_IF)
 wlan.active(True)
-wlan.connect(SSID, PASSWORD)
+wlan.connect(WIFI_CONFIG['ssid'], WIFI_CONFIG['password'])
 
 # Wait for connection
 print("Connecting to Wi-Fi...")

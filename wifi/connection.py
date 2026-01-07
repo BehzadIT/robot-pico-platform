@@ -1,15 +1,18 @@
 import network
 import time
+import sys
+from logger_uart import logd
 
-SSID = 'BIZI-HOME-24'
-PASSWORD = 'AUxHHs7#2V3DZwuVwkK5'
+# Add parent directory to path to import config
+sys.path.append('..')
+from config import WIFI_CONFIG
 
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    wlan.connect(SSID, PASSWORD)
+    wlan.connect(WIFI_CONFIG['ssid'], WIFI_CONFIG['password'])
 
-    print("Connecting to Wi-Fi...")
+    logd("Connecting to Wi-Fi...")
     timeout = 10  # seconds
     start = time.time()
     while not wlan.isconnected():
@@ -18,5 +21,5 @@ def connect_wifi():
         time.sleep(1)
 
     ip = wlan.ifconfig()[0]
-    print("Connected. IP address:", ip)
+    logd(f"Connected. IP address: {ip}")
     return ip
