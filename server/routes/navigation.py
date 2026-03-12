@@ -19,6 +19,14 @@ async def _send_json(ws, payload):
 def _controller_id():
     return "ws-%s" % utime.ticks_ms()
 
+
+def _command_type(data):
+    return data.get("t")
+
+
+def _command_seq(data):
+    return data.get("s")
+
 def init(app):
     @app.route('/ws')
     @with_websocket
@@ -32,45 +40,45 @@ def init(app):
                     _ws_log("client_closed", controller_id=controller_id)
                     break
 
-                logd("Received via WebSocket: %s" % msg)
                 try:
                     data = ujson.loads(msg)
                 except Exception as exc:
                     logw("Recoverable protocol error: invalid JSON (%s)" % exc)
-                    await _send_json(ws, {'error': 'invalid_json'})
+                    await _send_json(ws, {'t': 'e', 'c': 'ij'})
                     continue
 
-                command_type = data.get("type")
-                seq = data.get("seq")
-                logd("Command type=%s seq=%s controller=%s" % (command_type, seq, controller_id))
+                command_type = _command_type(data)
+                seq = _command_seq(data)
 
-                if command_type == "drive":
+                if command_type == "d":
                     try:
                         drive_request = ApiDriveRequest(data)
                         if not driverController.is_fresh_sequence(drive_request.seq, controller_id):
                             logw("Rejecting stale or foreign drive seq=%s controller=%s" % (drive_request.seq, controller_id))
-                            await _send_json(ws, {'error': 'stale_command', 'seq': drive_request.seq})
+                            await _send_json(ws, {'t': 'e', 'c': 'st', 's': drive_request.seq})
                             continue
                         driverController.drive(drive_request, controller_id=controller_id)
                         if not robot_pid.is_running():
+                            _ws_log("drive_start", controller_id=controller_id, seq=drive_request.seq, rpm=drive_request.target_rpm)
                             robot_pid.start(driverController)
                     except Exception as e:
                         loge("Recoverable drive command error: %s" % e)
-                        await _send_json(ws, {'error': 'bad_drive_command', 'detail': str(e)})
-                elif command_type == "stop":
+                        await _send_json(ws, {'t': 'e', 'c': 'bd'})
+                elif command_type == "s":
                     try:
                         did_stop = driverController.stop(controller_id=controller_id)
                         if did_stop:
                             robot_pid.terminate_thread()
-                            await _send_json(ws, {'status': 'stopped', 'type': 'stop_ack'})
+                            _ws_log("stop_ack", controller_id=controller_id, seq=seq)
+                            await _send_json(ws, {'t': 'a', 'c': 's', 's': seq})
                         else:
-                            await _send_json(ws, {'error': 'inactive_controller'})
+                            await _send_json(ws, {'t': 'e', 'c': 'ic'})
                     except Exception as e:
                         loge("Recoverable stop command error: %s" % e)
-                        await _send_json(ws, {'error': 'bad_stop_command', 'detail': str(e)})
+                        await _send_json(ws, {'t': 'e', 'c': 'bs'})
                 else:
                     logw("Recoverable protocol error: unknown command type=%s" % command_type)
-                    await _send_json(ws, {'error': 'unknown_command'})
+                    await _send_json(ws, {'t': 'e', 'c': 'uc'})
         except Exception as e:
             loge("WebSocket transport error: %s" % e)
         finally:
