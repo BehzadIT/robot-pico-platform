@@ -2,7 +2,6 @@ import utime
 import _thread
 from log import *
 from server.routes.request_models import ApiDriveRequest
-from services.robot_cross_coupled_pid import robot_pid
 
 nav_lock = _thread.allocate_lock()
 
@@ -16,27 +15,35 @@ class RobotNavigationController:
         # Direction: 0 for forward, 1 for reverse
         self._target_direction = 0
         self._last_command_time = utime.ticks_ms()
-        # Add other PID state vars here if you wish
+        self._active_controller_id = None
+        self._last_seq = -1
 
     # Exposed public API
-    def drive(self, drive_request: ApiDriveRequest):
+    def drive(self, drive_request: ApiDriveRequest, controller_id=None):
         with nav_lock:
-            robot_pid.start(driverController)
             self._target_rpm = drive_request.target_rpm
             self._target_direction = drive_request.target_direction
+            self._active_controller_id = controller_id
+            if drive_request.seq is not None:
+                self._last_seq = drive_request.seq
             self._last_command_time = utime.ticks_ms()
+            return True
 
     def turn(self, angle):
         with nav_lock:
             self._target_angle = angle
             self._last_command_time = utime.ticks_ms()
 
-    def stop(self):
+    def stop(self, controller_id=None, reason="manual_stop"):
         with nav_lock:
-            robot_pid.terminate_thread()
-            logd("Stop command received")
+            if controller_id is not None and self._active_controller_id not in (None, controller_id):
+                logw("Ignoring stop from non-active controller")
+                return False
             self._target_rpm = 0
+            self._active_controller_id = None
             self._last_command_time = utime.ticks_ms()
+            logi("Controller stop requested: %s" % reason)
+            return True
 
     # Internal: called by your main control loop
     def get_navigation_params(self):
@@ -48,7 +55,37 @@ class RobotNavigationController:
 
     def is_timeout(self, timeout_ms=2000):
         with nav_lock:
+            if self._target_rpm == 0:
+                return False
             return utime.ticks_diff(utime.ticks_ms(), self._last_command_time) > timeout_ms
+
+    def is_fresh_sequence(self, seq, controller_id=None):
+        with nav_lock:
+            if seq is None:
+                return True
+            if controller_id is not None and self._active_controller_id not in (None, controller_id):
+                return False
+            return seq > self._last_seq
+
+    def clear_controller_if_active(self, controller_id, reason="disconnect_stop"):
+        with nav_lock:
+            if self._active_controller_id != controller_id:
+                return False
+            self._target_rpm = 0
+            self._active_controller_id = None
+            self._last_command_time = utime.ticks_ms()
+            logw("Active controller lost: %s" % reason)
+            return True
+
+    def timeout_stop(self):
+        with nav_lock:
+            if self._target_rpm == 0:
+                return False
+            self._target_rpm = 0
+            self._active_controller_id = None
+            self._last_command_time = utime.ticks_ms()
+            logw("Command timeout reached; stopping controller")
+            return True
 
 
 # this is the singleton instance of the driver controller

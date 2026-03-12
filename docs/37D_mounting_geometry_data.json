@@ -1,0 +1,17 @@
+{
+    "outer_circle_diameter": 36.8,
+    "outer_circle_radius": 18.4,
+    "shaft_hole_diameter": 15.5,
+    "shaft_hole_radius": 7.75,
+    "shaft_center_y_from_bottom": 11.5,
+    "shaft_center_y_global": -6.9,
+    "m3_hole_diameter": 3.2,
+    "m3_hole_radius": 1.6,
+    "m3_pitch_circle_diameter": 31.0,
+    "m3_pitch_circle_radius": 15.5,
+    "material_thickness": 2.0,
+    "adjustment_offset_unsafe": 0.0,
+    "adjustment_offset_safe": -1.75,
+    "minimum_clearance_unsafe": 0.373,
+    "minimum_clearance_safe": 2.12
+}

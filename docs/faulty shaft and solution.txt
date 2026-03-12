@@ -1,0 +1,72 @@
+Original Robot tank motor shaft Adapter (Faulty) Reference – Saved
+
+Purpose: Connects 6 mm D-shaft motor to 8 mm hex sparklet wheel
+
+Total Length: 32 mm
+
+Hex Output Size: 8 mm across flats
+
+D-Shaft Side: Accepts 6 mm D-shaft
+
+Stopper Section: 10 mm diameter rounded base acts as a wheel stopper to hold wheel height
+
+Locking Mechanism: M4 grub/set screw (located ~4.5 mm from D-shaft center)
+
+Material: Likely aluminum
+
+Function: Ensures sparklet wheel aligns with track and does not slide too deep
+
+Problem: Adapter is slightly misaligned, causes noisy track movement and doesn't hold sprocket cleanly
+
+
+
+---
+
+Custom Adapter Solution – Saved
+
+Components:
+
+Pololu Adapter (Product 2687):
+
+6 mm D-shaft input
+
+12 mm hex output
+
+35 mm total length (to be filed down to 32 mm)
+
+Made of aluminum
+
+Includes 2 M4 set screws
+
+
+
+Modifications:
+
+Shortening: File down length by 3 mm using metal file
+
+Stopper Recreation:
+
+Use second M4 grub screw hole (outer one, 4.5 mm from center)
+
+Add washer stack on top of screw:
+
+1x 2.5 mm metal washer
+
+1x 2 mm rubber washer (optional anti-rattle)
+
+Total height = 3.5 mm to reach 10 mm total from D-shaft center
+
+Glued together to form a fixed stop ring
+
+
+
+
+Additional Notes:
+
+Sparklet wheel hex enlarged manually using flat metal file (reduce 8mm → 12mm)
+
+Metal file tool: 3-piece set with flat, round, and half-round files (TARIST brand)
+
+Plan avoids CNC work, uses standard parts + minor hand tooling
+
+Expected to replicate original adapter's geometry & functionality

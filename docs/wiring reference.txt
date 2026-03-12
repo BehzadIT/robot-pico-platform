@@ -1,0 +1,63 @@
+Here’s the complete wiring reference for your robot project
+
+Robot Wiring Reference – Motor, Driver, and Pico 2W
+
+Motor Encoder Wiring
+
+(Both motors use same wire colors.)
+
+Motor 1 (Right):
+
+Green  = Signal A → Raspberry Pi Pico GP10
+
+Yellow = Signal B → Raspberry Pi Pico GP11
+
+White  = VCC (Encoder) → 3.3V on Pico
+
+Blue   = GND (Encoder) → GND on Pico
+
+
+Motor 2 (Left):
+
+Green  = Signal A → Raspberry Pi Pico GP12
+
+Yellow = Signal B → Raspberry Pi Pico GP13
+
+White  = VCC (Encoder) → 3.3V on Pico
+
+Blue   = GND (Encoder) → GND on Pico
+
+
+
+---
+
+Motor Driver (Cytron MDD10A) to Raspberry Pi Pico
+
+PWM and Direction Control:
+
+White  = PWM1 (Motor 1) → Pico GP8
+
+Black  = DIR1 (Motor 1) → Pico GP9
+
+Purple = PWM2 (Motor 2) → Pico GP6
+
+Gray   = DIR2 (Motor 2) → Pico GP7
+
+
+Driver GND to Pico GND:
+
+Blue = GND → Raspberry Pi Pico GND
+
+
+
+---
+
+Motor Power Wiring
+
+Motor Driver VIN → 12V battery pack (4S LiFePO₄)
+
+Motor Driver GND → Battery GND
+
+Motor Outputs M1A / M1B → Motor 1 terminals
+
+Motor Outputs M2A / M2B → Motor 2 terminals

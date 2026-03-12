@@ -1,0 +1,73 @@
+Robot Battery System – Component Reference
+
+Battery Cells:
+
+Model: JGNE 18650 LiFePO₄ Cells
+
+Chemistry: Lithium Iron Phosphate (LiFePO₄)
+
+Voltage per cell: 3.2V nominal, 3.65V charge, 2.0V cutoff
+
+Capacity per cell: 2200mAh
+
+Max continuous discharge: 6.6A (3C)
+
+Max pulse discharge: 20A (10C for 10 seconds)
+
+Cycle life: >2000 cycles at 1C
+
+Quantity: 8 cells total
+
+Configuration: 4S2P = 12.8V, 4.4Ah (suitable for motors and regulators)
+
+
+BMS (Battery Management System):
+
+Model: DALY Smart BMS 4S 12V 30A (with UART communication)
+
+Functions: Cell balancing, overcharge, overdischarge, overcurrent, short circuit protection
+
+Continuous Current: 30A
+
+Communication: UART (can be connected to microcontroller for monitoring)
+
+Mounting: Installed at the base of the chassis with the battery pack
+
+Optional Features: Some versions include Bluetooth or active balancing (not required)
+
+
+Battery Charger:
+
+Model: Panther IQ Load EVO 5
+
+Input: 220–240V AC
+
+Output: Compatible with 4S LiFePO₄ – 14.6V regulated output
+
+Charging Current: 5A
+
+Smart Features: Microprocessor-controlled, multi-stage charging, LCD voltage display
+
+Trickle Mode: Disabled for LiFePO₄ (safe)
+
+Protection: Reverse polarity, overcurrent, overvoltage
+
+Use case: External smart charger until later upgrade to auto-docking
+
+
+Battery Connection Hardware:
+
+Wires: KabelDirekt 2x2.5 mm² OFC (oxygen-free copper) – good for 10A+
+
+Terminals: Copper cable lugs with insulating sleeves (crimp type, sizes SC6-6, SC10-6 etc.)
+
+Heat Shrink: Eventronic ET1001 shrink tube kit for safe insulation
+
+M6 Screws + Washers: Stainless steel, Allen key rounded head, with large washer set
+
+Washer Type: Large OD washers (DIN 9021) and copper sealing washers for tight clamp
+
+PVC Heat Shrink Wrap (Blue): 120 mm flat size, used to wrap final battery pack
+
+Assembly: Batteries connected using Z-tags, linked via bus bar or terminal stack, secured with screws + nuts + insulating layers
+

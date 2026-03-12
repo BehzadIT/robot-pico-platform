@@ -16,6 +16,7 @@
 import builtins
 import time
 import json
+import _thread
 from machine import UART, Pin
 
 # ======================================================
@@ -32,6 +33,11 @@ uart = UART(
     tx=Pin(UART_TX_PIN),
     rx=Pin(UART_RX_PIN),
 )
+
+# ======================================================
+# Global log lock (FIX)
+# ======================================================
+_log_lock = _thread.allocate_lock()
 
 # ======================================================
 # Tick counter (ESP-IDF style)
@@ -51,7 +57,8 @@ def _ticks() -> int:
 # ======================================================
 def _uart_write_bytes(data: bytes) -> None:
     try:
-        uart.write(data)
+        with _log_lock:
+            uart.write(data)
     except Exception:
         # UART failures must never break firmware
         pass
@@ -79,7 +86,8 @@ def _mirrored_print(*args, **kwargs) -> None:
     end = kwargs.get("end", "\n")
 
     # 1) Original behavior (USB REPL, IDE tools)
-    _orig_print(*args, **kwargs)
+    with _log_lock:
+        _orig_print(*args, **kwargs)
 
     # 2) UART mirror with ticks
     # NOTE: ticks are added ONLY on UART, never on USB
@@ -149,26 +157,20 @@ def _log(level: str, tag: str, msg: str) -> None:
     reset = _RESET
 
     # 1) UART output
-    _uart_write_bytes(f"{color}{line}\n{reset}".encode("utf-8"))
+    _uart_write_bytes(f"{color}{line}{reset}".encode("utf-8"))
 
     # 2) USB REPL output (NO implicit newline)
-    _orig_print(f"{color}{line}{reset}", end="")
+    with _log_lock:
+        _orig_print(f"{color}{line}{reset}", end="")
+
 
 # ======================================================
 # Public logging helpers
 # ======================================================
 def loge(msg: str, tag: str = "") -> None:  _log("E", tag, msg)
-
-
-def logw(msg: str, tag: str = "") -> None: _log("W", tag, msg)
-
-
+def logw(msg: str, tag: str = "") -> None:  _log("W", tag, msg)
 def logi(msg: str, tag: str = "") -> None:  _log("I", tag, msg)
-
-
 def logd(msg: str, tag: str = "") -> None:  _log("D", tag, msg)
-
-
 def logv(msg: str, tag: str = "") -> None:  _log("V", tag, msg)
 
 

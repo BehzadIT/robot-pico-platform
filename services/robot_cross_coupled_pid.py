@@ -76,6 +76,10 @@ class RobotPID:
                              integral_limits=(self.PID_INTEGRAL_MIN, self.PID_INTEGRAL_MAX),
                              output_limits=(self.PID_OUTPUT_MIN, self.PID_OUTPUT_MAX))
 
+    def is_running(self):
+        """Return whether the control loop is currently active."""
+        return not self.terminate_flag
+
     @staticmethod
     def log(msg, *args):
         """Uniform log output for PID and hardware events."""
@@ -147,16 +151,16 @@ class RobotPID:
         abs_rpm = abs(signed_rpm_setpoint)
 
         # Log input parameters
-        self.log("\n[PID] New Control Cycle - RPM: %d (%s), Angle: %.2f",
+        self.log("[PID] New Control Cycle - RPM: %d (%s), Angle: %.2f",
                  abs_rpm, "REVERSE" if direction < 0 else "FORWARD", turning_angle)
 
         # Normalize RPM (0.0 to 1.0)
         norm_velocity = self.normalize_rpm(abs_rpm)
-        self.log("  Normalized Velocity: %.2f (RPM: %d)", norm_velocity, abs_rpm)
+        self.log("Normalized Velocity: %.2f (RPM: %d)", norm_velocity, abs_rpm)
 
         # Calculate setpoints (0.0 to 1.0)
         left_set, right_set = self.calculate_setpoints(norm_velocity, turning_angle)
-        self.log("  Setpoints - Left: %.3f, Right: %.3f", left_set, right_set)
+        self.log("Setpoints - Left: %.3f, Right: %.3f", left_set, right_set)
 
         # Read actual RPMs and normalize (take absolute value for PID)
         measured_left, measured_right = self.read_rpms_pio()
@@ -165,14 +169,14 @@ class RobotPID:
         norm_measured_left = self.normalize_rpm(abs_measured_left)
         norm_measured_right = self.normalize_rpm(abs_measured_right)
 
-        self.log("  Measured RPMs - Left: %.1f (abs: %.1f, norm: %.3f), Right: %.1f (abs: %.1f, norm: %.3f)",
+        self.log("Measured RPMs - Left: %.1f (abs: %.1f, norm: %.3f), Right: %.1f (abs: %.1f, norm: %.3f)",
                  measured_left, abs_measured_left, norm_measured_left,
                  measured_right, abs_measured_right, norm_measured_right)
 
         # Calculate errors (use absolute values)
         left_error = left_set - norm_measured_left
         right_error = right_set - norm_measured_right
-        self.log("  Errors - Left: %.3f, Right: %.3f", left_error, right_error)
+        self.log("Errors - Left: %.3f, Right: %.3f", left_error, right_error)
 
         # Update PID setpoints
         self.pid_left.setpoint = left_set
@@ -181,7 +185,7 @@ class RobotPID:
         # Get PID outputs (0.0 to 1.0)
         left_pid_out = self.pid_left(norm_measured_left)
         right_pid_out = self.pid_right(norm_measured_right)
-        self.log("  PID Outputs - Left: %.3f, Right: %.3f", left_pid_out, right_pid_out)
+        self.log("PID Outputs - Left: %.3f, Right: %.3f", left_pid_out, right_pid_out)
 
         # Convert to PWM and apply direction
         left_pwm = int(self.denormalize_pwm(left_pid_out)) * direction
@@ -191,7 +195,7 @@ class RobotPID:
         left_pwm = int(self.clamp(left_pwm, -65535, 65535))
         right_pwm = int(self.clamp(right_pwm, -65535, 65535))
 
-        self.log("  Final PWM - Left: %d, Right: %d", left_pwm, right_pwm)
+        self.log("Final PWM - Left: %d, Right: %d", left_pwm, right_pwm)
 
         # Rest of the method remains the same...
         oscillation_detected = False
@@ -273,6 +277,14 @@ class RobotPID:
         self.terminate_flag = False  # Allow thread to run
 
         while not self.terminate_flag:
+            # The Pico owns the failsafe. Transport drops and stale control
+            # state must stop the robot even if the client does not manage to
+            # send an explicit stop command.
+            if driver_controller.is_timeout():
+                if driver_controller.timeout_stop():
+                    self.log("Command freshness timeout reached; exiting control loop.")
+                break
+
             navigation_params = driver_controller.get_navigation_params()
             self.log("Nav: angle=%.2f, rpm=%d",
                      navigation_params.target_angle,
@@ -293,6 +305,12 @@ class RobotPID:
 
             if self.test_mode and target_reached:
                 self.log("Target RPM reached. Ending test mode loop.")
+                break
+
+            # Stop requests can arrive while PID is computing. Re-check before
+            # writing PWM so a stop cannot be followed by one more motor update.
+            if self.terminate_flag or driver_controller.get_navigation_params().target_rpm == 0:
+                self.log("Stop requested during control cycle; skipping motor output.")
                 break
 
             if self.current_pwm_left != left_pwm:

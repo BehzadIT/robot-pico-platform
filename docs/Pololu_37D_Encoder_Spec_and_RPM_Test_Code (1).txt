@@ -1,0 +1,98 @@
+
+Pololu 37D Metal Gearmotor with Integrated Hall-Effect Encoder — Configuration Summary
+======================================================================================
+
+MOTOR:
+- Model: Pololu 37D Metal Gearmotor (30:1 gear ratio)
+- Operating Voltage: 12 V nominal (tested at 13.3 V)
+- No-load Output Shaft RPM @ 12 V: ~330 RPM
+- No-load Motor Shaft RPM @ 12 V: ~9900 RPM (Output RPM × Gear Ratio)
+- No-load Motor Shaft RPM @ 13.3 V: ~10,975 RPM
+
+ENCODER:
+- Type: Integrated dual-channel Hall-effect encoder
+- Output: Two 90° phase-shifted square waves (Channels A and B)
+- Voltage Requirements: 3.5 V – 20 V (recommended: 5 V from VBUS)
+- Logic Level: TTL-compatible (0 to Vcc)
+- Encoder Resolution: 64 CPR (Counts Per Revolution) at motor shaft using full quadrature decoding
+    - CPR Definition: Pololu documentation defines CPR as FULLY DECODED (i.e., all 4 edges on A and B)
+    - 1 tick = 1 edge (rising/falling on A or B)
+
+ENCODER RESOLUTION:
+- Motor Shaft: 64 counts per motor revolution
+- Output Shaft: 64 × 30 = 1920 counts per output shaft revolution
+
+TICKS PER REV TO USE IN CODE:
+- For motor RPM calculation:
+    TICKS_PER_REV = 64
+- For output shaft RPM:
+    output_rpm = motor_rpm / 30
+- For high precision position tracking at output:
+    TICKS_PER_OUTPUT_REV = 1920
+
+NOTES:
+- No need to multiply CPR by 4 — it is already fully decoded.
+- If only using A rising edge: TICKS_PER_REV = 16
+- Use interrupts on both A and B channels for full 4× decoding.
+
+-------------------------------------------------------------------------------
+
+Python RPM Monitoring Code (Validated with Pololu 37D Encoder)
+===============================================================
+
+from machine import Pin, PWM
+import time
+
+ENCODER_CPR = 64
+GEAR_RATIO = 30
+TICKS_PER_REV = ENCODER_CPR
+
+PWM1 = PWM(Pin(8))
+DIR1 = Pin(9, Pin.OUT)
+PWM1.freq(1000)
+DIR1.value(1)
+PWM1.duty_u16(65535)
+
+A = Pin(10, Pin.IN, Pin.PULL_UP)
+B = Pin(11, Pin.IN, Pin.PULL_UP)
+
+last_A = A.value()
+last_B = B.value()
+ticks = 0
+
+quad_table = [
+     0,  -1,   1,   0,
+     1,   0,   0,  -1,
+    -1,   0,   0,   1,
+     0,   1,  -1,   0
+]
+
+def update_encoder(pin):
+    global last_A, last_B, ticks
+    A_val = A.value()
+    B_val = B.value()
+    state = (last_A << 3) | (last_B << 2) | (A_val << 1) | B_val
+    ticks += quad_table[state & 0x0F]
+    last_A = A_val
+    last_B = B_val
+
+A.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=update_encoder)
+B.irq(trigger=Pin.IRQ_RISING | Pin.IRQ_FALLING, handler=update_encoder)
+
+print("Running motor at full speed for 1 second...")
+ticks = 0
+start_time = time.ticks_ms()
+time.sleep(1.0)
+elapsed = time.ticks_diff(time.ticks_ms(), start_time)
+
+PWM1.duty_u16(0)
+
+revs = ticks / TICKS_PER_REV
+motor_rpm = revs / (elapsed / 60000)
+output_rpm = motor_rpm / GEAR_RATIO
+
+print("\n=== RPM TEST RESULTS ===")
+print(f"Ticks counted:      {ticks}")
+print(f"Elapsed time (ms):  {elapsed}")
+print(f"Motor RPM:          {motor_rpm:.1f}")
+print(f"Output Shaft RPM:   {output_rpm:.1f}")
