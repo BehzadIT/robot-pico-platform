@@ -11,6 +11,7 @@
 # - PID state is reset deliberately on start/stop/fault/reversal
 
 import _thread
+import sys
 import time
 from machine import Pin, PWM, WDT
 
@@ -52,6 +53,8 @@ class RobotPID:
     SUMMARY_PERIOD_MS = ControlTiming.SUMMARY_PERIOD_MS
     COMMAND_TIMEOUT_MS = SafetyTiming.COMMAND_TIMEOUT_MS
     WDT_TIMEOUT_MS = SafetyTiming.WDT_TIMEOUT_MS
+    STOP_COMPLETION_TIMEOUT_MS = SafetyTiming.STOP_COMPLETION_TIMEOUT_MS
+    RECOVER_COMPLETION_TIMEOUT_MS = SafetyTiming.RECOVER_COMPLETION_TIMEOUT_MS
 
     STATE_IDLE = "idle"
     STATE_STARTING = "starting"
@@ -116,6 +119,35 @@ class RobotPID:
         self._last_loop_dt_us = 0
         self._watchdog = None
         self._last_command_seq = -1
+        self._pending_stop_seq = None
+        self._pending_stop_reason = None
+        self._completed_stop_seq = None
+        self._last_stop_error = None
+        self._pending_recover_seq = None
+        self._completed_recover_seq = None
+        self._last_recover_error = None
+        self._lifecycle_step = "init"
+
+    def _set_lifecycle_step(self, step):
+        """Record the last significant lifecycle step for debugging.
+
+        Breadcrumbs are intentionally sparse. They exist to tell us the last
+        meaningful transition point before a fault or wedge, not to trace every
+        control tick.
+        """
+        with self._lock:
+            self._lifecycle_step = step
+
+    def lifecycle_step(self):
+        with self._lock:
+            return self._lifecycle_step
+
+    @staticmethod
+    def _print_exception(exc):
+        try:
+            sys.print_exception(exc)
+        except Exception:
+            pass
 
     def _ensure_watchdog(self):
         """Arm the watchdog only once the drivetrain worker is alive.
@@ -208,6 +240,85 @@ class RobotPID:
         self._log_info("Clearing active drivetrain fault (%s)", reason)
         telemetry("drivetrain_fault_cleared", reason=reason, fault=cleared_fault)
 
+    def request_stop(self, seq=None, reason="manual_stop"):
+        """Request a stop without touching motor hardware from this caller.
+
+        The persistent worker owns actual PWM/DIR writes. External callers only
+        publish the intent to stop and optionally associate it with a command
+        sequence that can be acked after the worker completes the stop cycle.
+        """
+        with self._lock:
+            self._last_stop_error = None
+            self._pending_stop_reason = reason
+            if seq is not None:
+                self._pending_stop_seq = seq
+
+            if self._state == self.STATE_RECOVERING:
+                detail = "recovery in progress"
+                return {"ok": False, "code": "ri", "detail": detail}
+
+            if self._state in (self.STATE_IDLE, self.STATE_FAULTED):
+                if seq is not None:
+                    self._completed_stop_seq = seq
+                self._pending_stop_seq = None
+                self._pending_stop_reason = None
+                self._lifecycle_step = "stop_already_safe"
+                return {"ok": True, "detail": "already_stopped"}
+
+            self._set_state_locked(self.STATE_STOPPING, reason=reason)
+            self._lifecycle_step = "stop_requested"
+
+        self._log_info("Stop requested (reason=%s seq=%s)", reason, seq)
+        telemetry("drivetrain_stop_requested", reason=reason, seq=seq)
+        return {"ok": True, "detail": "stop_requested"}
+
+    def request_recover(self, seq=None):
+        """Request recovery without touching hardware from the caller thread."""
+        with self._lock:
+            if self._state not in (self.STATE_IDLE, self.STATE_FAULTED):
+                detail = "recovery requires idle or faulted state"
+                self._log_warn("Rejecting recovery while state=%s", self._state)
+                telemetry("drivetrain_recover_rejected", state=self._state, reason="unsafe_state")
+                return {"ok": False, "code": "rc", "detail": detail}
+
+            self._pending_recover_seq = seq
+            self._completed_recover_seq = None
+            self._last_recover_error = None
+            self._set_state_locked(self.STATE_RECOVERING, reason="recover_requested")
+            self._lifecycle_step = "recover_requested"
+
+        self._log_info("Recovery requested (seq=%s)", seq)
+        telemetry("drivetrain_recover_requested", seq=seq)
+        return {"ok": True, "detail": "recover_requested"}
+
+    def is_stop_completed(self, seq):
+        with self._lock:
+            if seq is None:
+                return self._pending_stop_seq is None and self._state == self.STATE_IDLE
+            return self._completed_stop_seq == seq
+
+    def is_recover_completed(self, seq):
+        with self._lock:
+            if seq is None:
+                return self._pending_recover_seq is None and self._state == self.STATE_IDLE
+            return self._completed_recover_seq == seq
+
+    def stop_error(self, seq=None):
+        with self._lock:
+            if self._last_stop_error is None:
+                return None
+            if seq is None or self._last_stop_error.get("seq") == seq:
+                return dict(self._last_stop_error)
+            return None
+
+    def recover_error(self, seq=None):
+        with self._lock:
+            if self._last_recover_error is None:
+                return None
+            if seq is None or self._last_recover_error.get("seq") == seq:
+                return dict(self._last_recover_error)
+            return None
+
     def _latch_fault(self, code, exc, extra=None):
         """Latch a drivetrain fault and force the controller into a safe stop.
 
@@ -221,54 +332,29 @@ class RobotPID:
                     "code": code,
                     "type": exc.__class__.__name__,
                     "message": str(exc),
+                    "lifecycle_step": self._lifecycle_step,
                 }
                 if extra:
                     self._fault.update(extra)
                 self._last_fault = dict(self._fault)
             self._set_state_locked(self.STATE_FAULTED, reason=code)
 
+        self._set_lifecycle_step("fault_latched")
         self.reset_pid_state(code)
         self.stop_motors()
         self._log_error(
-            "Latched drivetrain fault code=%s type=%s msg=%s",
+            "Latched drivetrain fault code=%s type=%s msg=%s step=%s",
             self._fault["code"],
             self._fault["type"],
             self._fault["message"],
+            self._fault.get("lifecycle_step", "unknown"),
         )
+        self._print_exception(exc)
         telemetry("drivetrain_fault", **self._fault)
 
     def recover(self):
-        """Recover the drivetrain only from a safe stopped state.
-
-        Recovery is explicit and manual by design. It is rejected while the
-        drivetrain is starting, running, or stopping so hardware reinit never
-        races live motion.
-        """
-        with self._lock:
-            if self._state not in (self.STATE_IDLE, self.STATE_FAULTED):
-                detail = "recovery requires idle or faulted state"
-                self._log_warn("Rejecting recovery while state=%s", self._state)
-                telemetry("drivetrain_recover_rejected", state=self._state, reason="unsafe_state")
-                return {"ok": False, "code": "rc", "detail": detail}
-            self._set_state_locked(self.STATE_RECOVERING, reason="recover_requested")
-
-        self.stop_motors()
-        self.reset_pid_state("recover")
-        self._next_tick_us = None
-        self._last_tick_us = None
-        self._last_loop_measurement = None
-        self._clear_active_fault("recover_requested")
-
-        try:
-            drivetrain_encoders.recover()
-            with self._lock:
-                self._set_state_locked(self.STATE_IDLE, reason="recover_succeeded")
-            self._log_info("Drivetrain recovery completed")
-            telemetry("drivetrain_recovered", last_fault=self._last_fault)
-            return {"ok": True, "code": "r", "detail": "recovered"}
-        except Exception as exc:
-            self._latch_fault("recovery_failed", exc, extra=drivetrain_encoders.fault_info())
-            return {"ok": False, "code": "rf", "detail": str(exc)}
+        """Compatibility wrapper retained for existing route callers."""
+        return self.request_recover()
 
     def start(self, navigation_controller):
         """Ensure the persistent worker exists and request the running state.
@@ -285,6 +371,13 @@ class RobotPID:
             if self._state == self.STATE_RECOVERING:
                 self._log_warn("Ignoring start request while recovery is in progress")
                 return {"ok": False, "code": "ri", "detail": "recovery in progress"}
+            if self._state == self.STATE_STOPPING:
+                # Stop completion is treated as an exclusive handoff. The
+                # worker must reach `idle` before a new drive request can arm
+                # `starting`, otherwise near-zero chatter can thrash the state
+                # machine between stop/start boundaries.
+                self._log_warn("Ignoring start request while stop is in progress")
+                return {"ok": False, "code": "si", "detail": "stop in progress"}
 
             self._driver_controller = navigation_controller
 
@@ -313,11 +406,7 @@ class RobotPID:
         no longer destroys the worker thread; it only moves the controller into
         `stopping` so the persistent worker can cleanly transition to `idle`.
         """
-        with self._lock:
-            if self._state == self.STATE_FAULTED:
-                return
-            self._set_state_locked(self.STATE_STOPPING, reason="stop_requested")
-        self.stop_motors()
+        self.request_stop(reason="stop_requested")
 
     def reset_pid_state(self, reason):
         """Reset all controller state that should not survive a motion segment.
@@ -572,14 +661,61 @@ class RobotPID:
 
     def _stop_cycle(self):
         """Finish a requested stop and return the worker to the idle state."""
+        self._set_lifecycle_step("stop_cycle_enter")
+        self._log_info("Worker entered stop cycle")
         self.stop_motors()
         self.reset_pid_state("stop")
         self._next_tick_us = None
         self._last_tick_us = None
         self._last_loop_measurement = None
+        self._hold_zero_until_us = None
         with self._lock:
+            completed_seq = self._pending_stop_seq
+            self._completed_stop_seq = completed_seq
+            self._pending_stop_seq = None
+            self._pending_stop_reason = None
+            self._last_stop_error = None
             if self._state == self.STATE_STOPPING:
                 self._set_state_locked(self.STATE_IDLE, reason="stop_completed")
+        self._set_lifecycle_step("stop_cycle_complete")
+        self._log_info("Worker completed stop cycle (seq=%s)", completed_seq)
+        telemetry("drivetrain_stop_completed", seq=completed_seq)
+
+    def _recover_cycle(self):
+        """Run encoder/motion recovery from the worker thread only."""
+        self._set_lifecycle_step("recover_cycle_enter")
+        self._log_info("Worker entered recovery cycle")
+        self.stop_motors()
+        self.reset_pid_state("recover")
+        self._next_tick_us = None
+        self._last_tick_us = None
+        self._last_loop_measurement = None
+        self._hold_zero_until_us = None
+
+        try:
+            self._set_lifecycle_step("recover_encoder_reinit")
+            drivetrain_encoders.recover()
+            self._clear_active_fault("recover_succeeded")
+            with self._lock:
+                completed_seq = self._pending_recover_seq
+                self._completed_recover_seq = completed_seq
+                self._pending_recover_seq = None
+                self._last_recover_error = None
+                if self._state == self.STATE_RECOVERING:
+                    self._set_state_locked(self.STATE_IDLE, reason="recover_succeeded")
+            self._set_lifecycle_step("recover_cycle_complete")
+            self._log_info("Drivetrain recovery completed (seq=%s)", completed_seq)
+            telemetry("drivetrain_recovered", seq=completed_seq, last_fault=self._last_fault)
+        except Exception as exc:
+            with self._lock:
+                self._last_recover_error = {
+                    "seq": self._pending_recover_seq,
+                    "code": "rf",
+                    "detail": str(exc),
+                    "lifecycle_step": self._lifecycle_step,
+                }
+                self._pending_recover_seq = None
+            self._latch_fault("recovery_failed", exc, extra=drivetrain_encoders.fault_info())
 
     def _worker_loop(self):
         """Persistent worker that owns the drivetrain state machine.
@@ -591,6 +727,7 @@ class RobotPID:
         self._ensure_watchdog()
         while True:
             try:
+                self._set_lifecycle_step("worker_wait")
                 state = self.state()
                 controller = self._driver_controller
 
@@ -608,15 +745,18 @@ class RobotPID:
                     continue
 
                 if state == self.STATE_RECOVERING:
+                    self._recover_cycle()
                     time.sleep_ms(20)
                     continue
 
                 if state == self.STATE_STARTING:
+                    self._set_lifecycle_step("starting_prepare")
                     if self._prepare_running_state():
                         self._emit_loop_summary()
                     time.sleep_ms(10)
                     continue
 
+                self._set_lifecycle_step("running_wait_tick")
                 tick_us = self._wait_for_next_tick()
 
                 if controller.is_timeout(self.COMMAND_TIMEOUT_MS):
@@ -632,7 +772,7 @@ class RobotPID:
                             timeout_ms=self.COMMAND_TIMEOUT_MS,
                             last_seq=self._last_command_seq,
                         )
-                    self.terminate_thread()
+                    self.request_stop(reason="command_timeout")
                     continue
 
                 navigation_params = controller.get_navigation_params()
@@ -647,7 +787,7 @@ class RobotPID:
                     target_sign = self._sign(signed_rpm_setpoint)
 
                 if signed_rpm_setpoint == 0:
-                    self.terminate_thread()
+                    self.request_stop(reason="zero_target")
                     continue
 
                 if self._last_target_sign and target_sign and target_sign != self._last_target_sign:
@@ -666,6 +806,7 @@ class RobotPID:
                         continue
                     self._hold_zero_until_us = None
 
+                self._set_lifecycle_step("running_sample_velocity")
                 measurement = drivetrain_encoders.sample_velocity(now_us=tick_us)
                 if not measurement["valid"]:
                     self._last_loop_measurement = measurement
@@ -683,12 +824,13 @@ class RobotPID:
                 )
 
                 if self.test_mode and (oscillation_detected or target_reached):
-                    self.terminate_thread()
+                    self.request_stop(reason="test_mode_stop")
                     continue
 
                 if self.state() != self.STATE_RUNNING or navigation_params.target_rpm == 0:
                     continue
 
+                self._set_lifecycle_step("running_apply_pwm")
                 if self.current_pwm_left != left_pwm:
                     self.set_motor_output(left_pwm, self.PWM_LEFT, self.DIR_LEFT, "Left")
                     self.current_pwm_left = left_pwm
@@ -703,6 +845,22 @@ class RobotPID:
                 self._last_loop_turning_angle = turning_angle
                 self._emit_loop_summary()
             except Exception as exc:
+                self._set_lifecycle_step("worker_exception")
+                with self._lock:
+                    if self._state == self.STATE_STOPPING:
+                        self._last_stop_error = {
+                            "seq": self._pending_stop_seq,
+                            "code": "sf",
+                            "detail": str(exc),
+                            "lifecycle_step": self._lifecycle_step,
+                        }
+                    elif self._state == self.STATE_RECOVERING:
+                        self._last_recover_error = {
+                            "seq": self._pending_recover_seq,
+                            "code": "rf",
+                            "detail": str(exc),
+                            "lifecycle_step": self._lifecycle_step,
+                        }
                 self._latch_fault("control_loop_failed", exc)
                 time.sleep_ms(50)
             finally:

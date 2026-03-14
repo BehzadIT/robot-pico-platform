@@ -22,6 +22,10 @@ class MotorLimits:
     """PWM and motor-speed constants for the drive outputs."""
 
     RPM_MAX = 330
+    # Small commanded RPM values are not useful for this drivetrain and can
+    # cause start/stop chatter if the UI hovers around zero. Pico-side command
+    # normalization treats anything below this threshold as a stop request.
+    MIN_EFFECTIVE_RPM = 8
     PWM_MIN = 4000
     PWM_MAX = 65535
     # 20 kHz keeps PWM above the audible range for most users and is a
@@ -69,6 +73,8 @@ class SafetyTiming:
 
     COMMAND_TIMEOUT_MS = 500
     WDT_TIMEOUT_MS = 2_000
+    STOP_COMPLETION_TIMEOUT_MS = 1_000
+    RECOVER_COMPLETION_TIMEOUT_MS = 3_000
 
 
 class SteeringLimits:
