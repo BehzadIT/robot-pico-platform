@@ -23,7 +23,9 @@ from logger import (
     logv,  # Verbose
     telemetry,
     enable_uart_print_mirror,
-    disable_stdout_uart_mirror
+    disable_stdout_uart_mirror,
+    set_global_log_level,
+    set_tag_log_level,
 )
 
 # Create a logger group for dot notation access
@@ -57,5 +59,7 @@ __all__ = [
     'telemetry',
     'enable_uart_print_mirror',
     'disable_stdout_uart_mirror',
+    'set_global_log_level',
+    'set_tag_log_level',
     'LoggerGroup'
 ]

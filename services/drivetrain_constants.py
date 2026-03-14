@@ -58,6 +58,19 @@ class ControlTiming:
     SUMMARY_PERIOD_MS = 1_000
 
 
+class SafetyTiming:
+    """Drivetrain safety timings.
+
+    `COMMAND_TIMEOUT_MS` is intentionally much shorter than a full network
+    reconnect cycle so a missed stop or stalled command stream drops motor
+    output quickly. `WDT_TIMEOUT_MS` is longer because it is only a last-resort
+    backstop for full worker/interpreter wedges.
+    """
+
+    COMMAND_TIMEOUT_MS = 500
+    WDT_TIMEOUT_MS = 2_000
+
+
 class SteeringLimits:
     """Steering-angle semantics shared across transport, UI, and control.
 

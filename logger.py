@@ -125,7 +125,7 @@ LOG_LEVELS = {
     "V": 5,  # Verbose
 }
 
-_GLOBAL_LOG_LEVEL = LOG_LEVELS["D"]
+_GLOBAL_LOG_LEVEL = LOG_LEVELS["I"]
 _TAG_LOG_LEVELS = {}
 
 # ANSI colors (safe over UART -> ESP32 -> terminal)
@@ -172,6 +172,25 @@ def logw(msg: str, tag: str = "") -> None:  _log("W", tag, msg)
 def logi(msg: str, tag: str = "") -> None:  _log("I", tag, msg)
 def logd(msg: str, tag: str = "") -> None:  _log("D", tag, msg)
 def logv(msg: str, tag: str = "") -> None:  _log("V", tag, msg)
+
+
+def set_global_log_level(level: str) -> None:
+    """Set the default log threshold for all tags.
+
+    Motion control defaults to info-level logging because synchronous UART/USB
+    debug output can materially disturb timing on MicroPython. Bench debugging
+    can opt back into `D` or `V` deliberately.
+    """
+    global _GLOBAL_LOG_LEVEL
+    _GLOBAL_LOG_LEVEL = LOG_LEVELS.get(level, _GLOBAL_LOG_LEVEL)
+
+
+def set_tag_log_level(tag: str, level=None) -> None:
+    """Override or clear the log threshold for one tag."""
+    if level is None:
+        _TAG_LOG_LEVELS.pop(tag, None)
+        return
+    _TAG_LOG_LEVELS[tag] = LOG_LEVELS.get(level, _GLOBAL_LOG_LEVEL)
 
 
 # ======================================================

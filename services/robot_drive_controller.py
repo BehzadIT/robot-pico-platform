@@ -1,7 +1,7 @@
 import utime
 import _thread
 from log import *
-from services.drivetrain_constants import SteeringLimits
+from services.drivetrain_constants import SafetyTiming, SteeringLimits
 from server.routes.request_models import ApiDriveRequest
 
 nav_lock = _thread.allocate_lock()
@@ -57,13 +57,20 @@ class RobotNavigationController:
             return NavigationParams(
                 self._target_rpm,
                 self._target_angle,
-                self._target_direction)
+                self._target_direction,
+                self._last_seq,
+                utime.ticks_diff(utime.ticks_ms(), self._last_command_time),
+            )
 
-    def is_timeout(self, timeout_ms=2000):
+    def is_timeout(self, timeout_ms=SafetyTiming.COMMAND_TIMEOUT_MS):
         with nav_lock:
             if self._target_rpm == 0:
                 return False
             return utime.ticks_diff(utime.ticks_ms(), self._last_command_time) > timeout_ms
+
+    def command_age_ms(self):
+        with nav_lock:
+            return utime.ticks_diff(utime.ticks_ms(), self._last_command_time)
 
     def is_fresh_sequence(self, seq, controller_id=None):
         with nav_lock:
@@ -105,10 +112,12 @@ driverController = RobotNavigationController()
 
 
 class NavigationParams:
-    def __init__(self, rpm, angle, direction):
+    def __init__(self, rpm, angle, direction, last_seq, command_age_ms):
         self.target_rpm = rpm
         self.target_angle = angle
         self.target_direction = direction
+        self.last_seq = last_seq
+        self.command_age_ms = command_age_ms
 
     def get_signed_target_rpm(self):
         if self.target_direction == 0:

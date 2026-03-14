@@ -12,10 +12,10 @@
 
 import _thread
 import time
-from machine import Pin, PWM
+from machine import Pin, PWM, WDT
 
 from log import logd, loge, logi, logw, telemetry
-from services.drivetrain_constants import ControlTiming, MotorLimits, MotorPins, SteeringLimits
+from services.drivetrain_constants import ControlTiming, MotorLimits, MotorPins, SafetyTiming, SteeringLimits
 from services.encoder_subsystem import drivetrain_encoders
 from services.simple_pid import PID
 
@@ -50,6 +50,8 @@ class RobotPID:
     OSCILLATION_THRESHOLD = 10000
     CONTROL_PERIOD_US = ControlTiming.CONTROL_PERIOD_US
     SUMMARY_PERIOD_MS = ControlTiming.SUMMARY_PERIOD_MS
+    COMMAND_TIMEOUT_MS = SafetyTiming.COMMAND_TIMEOUT_MS
+    WDT_TIMEOUT_MS = SafetyTiming.WDT_TIMEOUT_MS
 
     STATE_IDLE = "idle"
     STATE_STARTING = "starting"
@@ -112,6 +114,40 @@ class RobotPID:
         self._last_loop_target_rpm = 0
         self._last_loop_turning_angle = 0
         self._last_loop_dt_us = 0
+        self._watchdog = None
+        self._last_command_seq = -1
+
+    def _ensure_watchdog(self):
+        """Arm the watchdog only once the drivetrain worker is alive.
+
+        `robot_pid` is instantiated during route registration, before Wi-Fi
+        connect and server startup. Delaying WDT creation avoids reboot loops
+        during normal boot while still protecting active drivetrain sessions
+        from full worker/interpreter wedges later.
+        """
+        if self._watchdog is not None:
+            return
+        try:
+            self._watchdog = WDT(timeout=self.WDT_TIMEOUT_MS)
+            self._log_info("Drivetrain watchdog enabled (%sms)", self.WDT_TIMEOUT_MS)
+            telemetry("drivetrain_watchdog_enabled", timeout_ms=self.WDT_TIMEOUT_MS)
+        except Exception as exc:
+            self._log_warn("Unable to enable drivetrain watchdog: %s", exc)
+            telemetry("drivetrain_watchdog_unavailable", reason=str(exc))
+
+    def _feed_watchdog(self):
+        """Feed the watchdog after a successful worker iteration.
+
+        The watchdog is a last-resort guard for full wedges, not a replacement
+        for the 500 ms command timeout. If the worker or interpreter stops
+        making progress, this feed path stops running and the Pico resets.
+        """
+        if self._watchdog is None:
+            return
+        try:
+            self._watchdog.feed()
+        except Exception as exc:
+            self._log_warn("Failed to feed drivetrain watchdog: %s", exc)
 
     @staticmethod
     def _sign(value):
@@ -461,6 +497,8 @@ class RobotPID:
             target_rpm=self._last_loop_target_rpm,
             turning_angle=self._last_loop_turning_angle,
             dt_us=self._last_loop_dt_us,
+            last_seq=self._last_command_seq,
+            command_age_ms=measurement.get("command_age_ms", 0),
             left_rpm=measurement.get("left_rpm", 0.0),
             right_rpm=measurement.get("right_rpm", 0.0),
             left_delta=measurement.get("left_delta", 0),
@@ -550,6 +588,7 @@ class RobotPID:
         thread-churn and stale-hardware races from the old start/kill design.
         """
         self._log_info("Persistent drivetrain worker started")
+        self._ensure_watchdog()
         while True:
             try:
                 state = self.state()
@@ -580,9 +619,19 @@ class RobotPID:
 
                 tick_us = self._wait_for_next_tick()
 
-                if controller.is_timeout():
+                if controller.is_timeout(self.COMMAND_TIMEOUT_MS):
                     if controller.timeout_stop():
-                        self._log_warn("Command freshness timeout reached; stopping drivetrain")
+                        self._log_warn(
+                            "Command freshness timeout reached; stopping drivetrain (age_ms=%s timeout_ms=%s)",
+                            controller.command_age_ms(),
+                            self.COMMAND_TIMEOUT_MS,
+                        )
+                        telemetry(
+                            "drivetrain_timeout_stop",
+                            age_ms=controller.command_age_ms(),
+                            timeout_ms=self.COMMAND_TIMEOUT_MS,
+                            last_seq=self._last_command_seq,
+                        )
                     self.terminate_thread()
                     continue
 
@@ -590,6 +639,7 @@ class RobotPID:
                 signed_rpm_setpoint = navigation_params.get_signed_target_rpm()
                 turning_angle = navigation_params.target_angle
                 target_sign = self._sign(signed_rpm_setpoint)
+                self._last_command_seq = navigation_params.last_seq
 
                 if self.test_mode:
                     signed_rpm_setpoint = 330
@@ -621,6 +671,7 @@ class RobotPID:
                     self._last_loop_measurement = measurement
                     self._last_loop_target_rpm = signed_rpm_setpoint
                     self._last_loop_turning_angle = turning_angle
+                    measurement["command_age_ms"] = navigation_params.command_age_ms
                     self._emit_loop_summary()
                     continue
 
@@ -646,6 +697,7 @@ class RobotPID:
                     self.current_pwm_right = right_pwm
 
                 self._last_target_sign = target_sign
+                measurement["command_age_ms"] = navigation_params.command_age_ms
                 self._last_loop_measurement = measurement
                 self._last_loop_target_rpm = signed_rpm_setpoint
                 self._last_loop_turning_angle = turning_angle
@@ -653,6 +705,8 @@ class RobotPID:
             except Exception as exc:
                 self._latch_fault("control_loop_failed", exc)
                 time.sleep_ms(50)
+            finally:
+                self._feed_watchdog()
 
 
 robot_pid = RobotPID()
