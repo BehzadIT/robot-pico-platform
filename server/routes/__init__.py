@@ -1,4 +1,3 @@
-from. import navigation
+from src.transport.routes import register_routes
 
-def register_routes(app):
-    navigation.init(app)
+__all__ = ["register_routes"]

@@ -20,3 +20,37 @@ This repo contains the Pico firmware and control-side logic for the robot.
 - Code documentation matters in this project. Add clear comments or docstrings for non-obvious behavior, especially around lifecycle, protocol semantics, safety behavior, hardware ownership, fault handling, recovery, timing assumptions, and sign conventions.
 - Do not add comments for obvious line-by-line mechanics; document the parts another engineer could misread and accidentally break.
 - If code changes invalidate the shared docs, update the docs as part of the same work.
+
+## Structure Pattern
+- Use firmware-oriented structure, not web-app layering names.
+- Prefer these parent directories and meanings:
+  - `src/` for project-owned runtime code.
+  - `src/app/` for bootstrapping, startup lifecycle, and top-level composition.
+  - `src/control/` for drivetrain control logic, safety state machines, and closed-loop behavior.
+  - `src/protocol/` for command schema, protocol validation, DTOs, acknowledgements, and error codes.
+  - `src/transport/` for websocket, HTTP, request routing, and connection/session handling.
+  - `src/platform/` for Pico/Wi-Fi/runtime integration details.
+  - `src/hardware/` for hardware-facing drivers and pin-bound subsystems such as encoders or motor interfaces.
+  - `src/support/` for logging and tightly scoped shared utilities.
+  - `lib/` for deployed runtime dependency code and vendored libraries used by MicroPython on-device.
+  - `tests/` for retained tests.
+  - `experiments/` for bench scripts and temporary tuning work that should not sit at repo root.
+- Do not use `services/` as a long-term catch-all. Split by responsibility:
+  - control behavior goes to `control/`
+  - hardware-facing code goes to `hardware/`
+  - protocol objects go to `protocol/`
+- Do not use `server/` as a broad bucket when the code is specifically transport or protocol handling.
+- Keep the current architectural boundary intact while restructuring:
+  - Pico remains authoritative for real-time control and safety.
+  - transport/protocol code may request actions, but control and hardware ownership stay below `control/` and `hardware/`.
+- For the current repo, the preferred target shape is:
+  - root `main.py` as a thin bootstrap entrypoint, delegating into `src/app/`.
+  - `src/transport/` for the websocket route handlers and session handling.
+  - `src/protocol/` for request models, command parsing, protocol constants, and ack/error payload helpers.
+  - `src/control/` for navigation controller, PID orchestration, drivetrain policy, and safety timing logic.
+  - `src/hardware/` for encoder and hardware-bound modules.
+  - `src/platform/` for Wi-Fi and MicroPython runtime-specific integration.
+  - `src/support/` for logging and narrow shared helpers.
+  - `lib/` for vendored libraries such as Microdot, websocket helpers, and third-party runtime packages.
+  - `experiments/` for RPM tests, balancing scripts, and temporary bench programs.
+- When adding a file, place it by hardware/control/transport responsibility first, and only use broad shared folders when reuse is already real.
