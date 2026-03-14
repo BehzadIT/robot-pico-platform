@@ -18,7 +18,7 @@ from machine import Pin, PWM, WDT
 from src.support.logging import logd, loge, logi, logw, telemetry
 from src.control.drivetrain_constants import ControlTiming, MotorLimits, MotorPins, SafetyTiming, SteeringLimits
 from src.hardware.encoder_subsystem import drivetrain_encoders
-from services.simple_pid import PID
+from lib.simple_pid import PID
 
 
 DRIVETRAIN_TAG = "drivetrain"

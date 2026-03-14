@@ -1,7 +1,20 @@
 import network
 import time
 from src.support.logging import *
-from config import WIFI_CONFIG
+
+try:
+    from settings.config import WIFI_CONFIG
+except ImportError as exc:
+    raise RuntimeError(
+        "Missing settings/config.py in the firmware upload set."
+    ) from exc
+
+try:
+    from settings.secrets import WIFI_CREDENTIALS
+except ImportError as exc:
+    raise RuntimeError(
+        "Missing settings/secrets.py. Create it with WIFI_CREDENTIALS before upload."
+    ) from exc
 
 WIFI_TAG = "wifi"
 
@@ -122,8 +135,8 @@ def _wait_for_connection(wlan, attempt, timeout_s):
 
 
 def connect_wifi():
-    ssid = WIFI_CONFIG["ssid"]
-    password = WIFI_CONFIG["password"]
+    ssid = WIFI_CREDENTIALS["ssid"]
+    password = WIFI_CREDENTIALS["password"]
     connect_timeout_s = _cfg("connect_timeout_s", DEFAULT_CONNECT_TIMEOUT_S)
     max_attempts = _cfg("max_attempts", DEFAULT_MAX_ATTEMPTS)
     retry_backoff_ms = _cfg("retry_backoff_ms", DEFAULT_RETRY_BACKOFF_MS)

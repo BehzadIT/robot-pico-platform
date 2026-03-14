@@ -3,13 +3,13 @@ import socket
 import time
 
 # Import config and logging
-from config import WIFI_CONFIG
+from settings.secrets import WIFI_CREDENTIALS
 from log import *
 
 # Connect to your router (station mode)
 wlan = network.WLAN(network.STA_IF)
 wlan.active(True)
-wlan.connect(WIFI_CONFIG['ssid'], WIFI_CONFIG['password'])
+wlan.connect(WIFI_CREDENTIALS['ssid'], WIFI_CREDENTIALS['password'])
 
 # Wait for connection
 logi("Connecting to Wi-Fi...")

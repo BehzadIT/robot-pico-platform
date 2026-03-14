@@ -1,5 +1,4 @@
 # Config files
-config.py
 local.properties
 
 # Byte-compiled / optimized / DLL files
@@ -177,3 +176,6 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 /typings/
+
+# Local Pico secrets stay out of git but are still uploaded from the repo.
+/settings/secrets.py
