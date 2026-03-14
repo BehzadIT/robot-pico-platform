@@ -1,6 +1,7 @@
 import utime
 import _thread
 from log import *
+from services.drivetrain_constants import SteeringLimits
 from server.routes.request_models import ApiDriveRequest
 
 nav_lock = _thread.allocate_lock()
@@ -9,9 +10,12 @@ nav_lock = _thread.allocate_lock()
 class RobotNavigationController:
     def __init__(self):
         self._target_rpm = 0
-        # Min Angle: -90 Maximum left turn (left track nearly stopped, right track max)
-        # Max Angle: +90 Maximum right turn (right track nearly stopped, left track max)
-        self._target_angle = 0
+        # Steering convention shared with transport/UI/control:
+        # - negative angle = steer left
+        # - positive angle = steer right
+        # With inner-track slowdown, the inside track is reduced toward zero as
+        # the command approaches +/-90 degrees.
+        self._target_angle = SteeringLimits.ANGLE_DEFAULT
         # Direction: 0 for forward, 1 for reverse
         self._target_direction = 0
         self._last_command_time = utime.ticks_ms()
@@ -23,6 +27,7 @@ class RobotNavigationController:
         with nav_lock:
             self._target_rpm = drive_request.target_rpm
             self._target_direction = drive_request.target_direction
+            self._target_angle = self._clamp_angle(drive_request.target_angle)
             self._active_controller_id = controller_id
             if drive_request.seq is not None:
                 self._last_seq = drive_request.seq
@@ -31,7 +36,7 @@ class RobotNavigationController:
 
     def turn(self, angle):
         with nav_lock:
-            self._target_angle = angle
+            self._target_angle = self._clamp_angle(angle)
             self._last_command_time = utime.ticks_ms()
 
     def stop(self, controller_id=None, reason="manual_stop"):
@@ -40,6 +45,7 @@ class RobotNavigationController:
                 logw("Ignoring stop from non-active controller")
                 return False
             self._target_rpm = 0
+            self._target_angle = SteeringLimits.ANGLE_DEFAULT
             self._active_controller_id = None
             self._last_command_time = utime.ticks_ms()
             logi("Controller stop requested: %s" % reason)
@@ -72,6 +78,7 @@ class RobotNavigationController:
             if self._active_controller_id != controller_id:
                 return False
             self._target_rpm = 0
+            self._target_angle = SteeringLimits.ANGLE_DEFAULT
             self._active_controller_id = None
             self._last_command_time = utime.ticks_ms()
             logw("Active controller lost: %s" % reason)
@@ -82,10 +89,15 @@ class RobotNavigationController:
             if self._target_rpm == 0:
                 return False
             self._target_rpm = 0
+            self._target_angle = SteeringLimits.ANGLE_DEFAULT
             self._active_controller_id = None
             self._last_command_time = utime.ticks_ms()
             logw("Command timeout reached; stopping controller")
             return True
+
+    @staticmethod
+    def _clamp_angle(angle):
+        return max(SteeringLimits.ANGLE_MIN, min(SteeringLimits.ANGLE_MAX, int(angle)))
 
 
 # this is the singleton instance of the driver controller

@@ -1,5 +1,6 @@
 import utime
 
+
 def _clamp(value, limits):
     lower, upper = limits
     if value is None:
@@ -11,7 +12,12 @@ def _clamp(value, limits):
     return value
 
 class PID(object):
-    """A simple PID controller."""
+    """A simple PID controller.
+
+    This local helper is used in the drivetrain hot path, so its timing rules
+    need to stay explicit. When the caller provides `dt`, that value is the
+    source of truth for the control interval.
+    """
 
     def __init__(
         self,
@@ -100,10 +106,9 @@ class PID(object):
         elif dt <= 0:
             raise ValueError('dt has negative value {}, must be positive'.format(dt))
 
-        # --- Use seconds internally! ---
+        # The drivetrain loop runs in microseconds, but the PID math uses
+        # seconds internally so Ki/Kd stay in conventional units.
         dt_sec = self._dt_to_seconds(dt)
-        # For debugging:
-        # print(f"[PID] dt_raw={dt} dt_sec={dt_sec} scale={self.scale}")
 
         if self.sample_time is not None and dt_sec < self.sample_time and self._last_output is not None:
             return self._last_output
@@ -165,10 +170,16 @@ class PID(object):
         self.set_auto_mode(enabled)
 
     def set_auto_mode(self, enabled, last_output=None):
+        """Enable/disable automatic control mode.
+
+        When re-entering auto mode, integral state is seeded from the last
+        output and clamped to the integral limits so re-enable does not cause
+        an immediate windup jump.
+        """
         if enabled and not self._auto_mode:
             self.reset()
             self._integral = last_output if (last_output is not None) else 0
-            self._integral = _clamp(self._integral, self.output_limitsoutput_limits)
+            self._integral = _clamp(self._integral, self.integral_limits)
         self._auto_mode = enabled
 
     @property
@@ -177,7 +188,7 @@ class PID(object):
 
     @property
     def integral_limits(self):
-        return self._min_output, self._max_output
+        return self._min_integral, self._max_integral
 
     @output_limits.setter
     def output_limits(self, limits):
@@ -206,10 +217,11 @@ class PID(object):
         self._integral = _clamp(self._integral, self.integral_limits)
 
     def reset(self):
+        """Clear P/I/D history while preserving configured limits and gains."""
         self._proportional = 0
         self._integral = 0
         self._derivative = 0
-        self._integral = _clamp(self._integral, self.output_limits)
+        self._integral = _clamp(self._integral, self.integral_limits)
         self._last_time = self.time()
         self._last_output = None
         self._last_input = None
