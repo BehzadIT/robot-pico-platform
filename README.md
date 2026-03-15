@@ -1,4 +1,4 @@
-# Blip
+# robot-pico-platform
 
 ## Pico Deploy
 The Pico is uploaded from the real firmware paths via the shared `Upload to Pico` MicroPython run configuration.
