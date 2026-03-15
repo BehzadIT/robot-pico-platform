@@ -72,7 +72,11 @@ class SafetyTiming:
     """
 
     COMMAND_TIMEOUT_MS = 500
-    WDT_TIMEOUT_MS = 2_000
+    # After a timeout-triggered stop, ignore very near-boundary drive commands
+    # for one brief guard window so stale in-flight frames cannot immediately
+    # re-arm the drivetrain.
+    TIMEOUT_RESTART_GUARD_MS = 150
+    WDT_TIMEOUT_MS = 4_000
     STOP_COMPLETION_TIMEOUT_MS = 1_000
     RECOVER_COMPLETION_TIMEOUT_MS = 3_000
 

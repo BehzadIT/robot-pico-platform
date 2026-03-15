@@ -15,6 +15,7 @@ import sys
 import time
 from machine import Pin, PWM, WDT
 
+from settings.config import DRIVETRAIN_CONFIG
 from src.support.logging import logd, loge, logi, logw, telemetry
 from src.control.drivetrain_constants import ControlTiming, MotorLimits, MotorPins, SafetyTiming, SteeringLimits
 from src.hardware.encoder_subsystem import drivetrain_encoders
@@ -150,14 +151,19 @@ class RobotPID:
             pass
 
     def _ensure_watchdog(self):
-        """Arm the watchdog only once the drivetrain worker is alive.
+        """Arm the watchdog only once the drivetrain startup path is healthy.
 
         `robot_pid` is instantiated during route registration, before Wi-Fi
-        connect and server startup. Delaying WDT creation avoids reboot loops
-        during normal boot while still protecting active drivetrain sessions
-        from full worker/interpreter wedges later.
+        connect and server startup. We also defer WDT creation until the worker
+        has successfully completed encoder/startup preparation. That keeps the
+        watchdog focused on active drivetrain sessions and avoids hiding
+        startup-path stalls behind immediate reboot loops.
         """
         if self._watchdog is not None:
+            return
+        if not DRIVETRAIN_CONFIG.get("enable_watchdog", False):
+            self._log_info("Drivetrain watchdog disabled by config")
+            telemetry("drivetrain_watchdog_disabled")
             return
         try:
             self._watchdog = WDT(timeout=self.WDT_TIMEOUT_MS)
@@ -268,8 +274,9 @@ class RobotPID:
             self._set_state_locked(self.STATE_STOPPING, reason=reason)
             self._lifecycle_step = "stop_requested"
 
-        self._log_info("Stop requested (reason=%s seq=%s)", reason, seq)
-        telemetry("drivetrain_stop_requested", reason=reason, seq=seq)
+        if reason != "zero_target":
+            self._log_info("Stop requested (reason=%s seq=%s)", reason, seq)
+            telemetry("drivetrain_stop_requested", reason=reason, seq=seq)
         return {"ok": True, "detail": "stop_requested"}
 
     def request_recover(self, seq=None):
@@ -399,6 +406,58 @@ class RobotPID:
 
         return {"ok": True}
 
+    def request_drive(self, navigation_controller, drive_request, controller_id=None):
+        """Accept one drive request with guarded admission semantics.
+
+        The transport layer should not stage `start()` and controller mutation
+        as separate public steps. This helper validates state first, records the
+        drive request, then rechecks state before arming `starting`.
+        """
+        should_start_worker = False
+        with self._lock:
+            if self._state == self.STATE_FAULTED:
+                self._log_warn("Ignoring drive request while faulted")
+                return {"ok": False, "code": "hf", "detail": "drivetrain faulted"}
+            if self._state == self.STATE_RECOVERING:
+                self._log_warn("Ignoring drive request while recovery is in progress")
+                return {"ok": False, "code": "ri", "detail": "recovery in progress"}
+            if self._state == self.STATE_STOPPING:
+                self._log_warn("Ignoring drive request while stop is in progress")
+                return {"ok": False, "code": "si", "detail": "stop in progress"}
+            self._driver_controller = navigation_controller
+            if not self._worker_started:
+                self._worker_started = True
+                should_start_worker = True
+
+        drive_result = navigation_controller.accept_drive_request(drive_request, controller_id=controller_id)
+        if not drive_result["ok"]:
+            return drive_result
+
+        with self._lock:
+            if self._state == self.STATE_FAULTED:
+                navigation_controller.revoke_drive_request(drive_request.seq, controller_id=controller_id, reason="faulted_after_accept")
+                return {"ok": False, "code": "hf", "detail": "drivetrain faulted"}
+            if self._state == self.STATE_RECOVERING:
+                navigation_controller.revoke_drive_request(drive_request.seq, controller_id=controller_id, reason="recovering_after_accept")
+                return {"ok": False, "code": "ri", "detail": "recovery in progress"}
+            if self._state == self.STATE_STOPPING:
+                navigation_controller.revoke_drive_request(drive_request.seq, controller_id=controller_id, reason="stopping_after_accept")
+                return {"ok": False, "code": "si", "detail": "stop in progress"}
+            if self._state != self.STATE_RUNNING:
+                self._set_state_locked(self.STATE_STARTING, reason="drive_requested")
+
+        if should_start_worker:
+            try:
+                _thread.start_new_thread(self._worker_loop, ())
+            except Exception as exc:
+                with self._lock:
+                    self._worker_started = False
+                navigation_controller.revoke_drive_request(drive_request.seq, controller_id=controller_id, reason="worker_start_failed")
+                self._latch_fault("worker_start_failed", exc)
+                return {"ok": False, "code": "hf", "detail": "worker start failed"}
+
+        return {"ok": True}
+
     def terminate_thread(self):
         """Request a controlled stop.
 
@@ -421,8 +480,9 @@ class RobotPID:
         self.prev_pwm_right = None
         self._last_target_sign = 0
         self._hold_zero_until_us = None
-        self._log_info("PID state reset (%s)", reason)
-        telemetry("drivetrain_pid_reset", reason=reason)
+        if reason != "stop":
+            self._log_info("PID state reset (%s)", reason)
+            telemetry("drivetrain_pid_reset", reason=reason)
 
     def normalize_rpm(self, rpm):
         return rpm / self.RPM_MAX
@@ -662,13 +722,15 @@ class RobotPID:
     def _stop_cycle(self):
         """Finish a requested stop and return the worker to the idle state."""
         self._set_lifecycle_step("stop_cycle_enter")
-        self._log_info("Worker entered stop cycle")
+        self._feed_watchdog()
         self.stop_motors()
+        self._feed_watchdog()
         self.reset_pid_state("stop")
         self._next_tick_us = None
         self._last_tick_us = None
         self._last_loop_measurement = None
         self._hold_zero_until_us = None
+        self._feed_watchdog()
         with self._lock:
             completed_seq = self._pending_stop_seq
             self._completed_stop_seq = completed_seq
@@ -677,9 +739,8 @@ class RobotPID:
             self._last_stop_error = None
             if self._state == self.STATE_STOPPING:
                 self._set_state_locked(self.STATE_IDLE, reason="stop_completed")
+        self._feed_watchdog()
         self._set_lifecycle_step("stop_cycle_complete")
-        self._log_info("Worker completed stop cycle (seq=%s)", completed_seq)
-        telemetry("drivetrain_stop_completed", seq=completed_seq)
 
     def _recover_cycle(self):
         """Run encoder/motion recovery from the worker thread only."""
@@ -724,7 +785,6 @@ class RobotPID:
         thread-churn and stale-hardware races from the old start/kill design.
         """
         self._log_info("Persistent drivetrain worker started")
-        self._ensure_watchdog()
         while True:
             try:
                 self._set_lifecycle_step("worker_wait")
@@ -752,6 +812,7 @@ class RobotPID:
                 if state == self.STATE_STARTING:
                     self._set_lifecycle_step("starting_prepare")
                     if self._prepare_running_state():
+                        self._ensure_watchdog()
                         self._emit_loop_summary()
                     time.sleep_ms(10)
                     continue
@@ -759,19 +820,23 @@ class RobotPID:
                 self._set_lifecycle_step("running_wait_tick")
                 tick_us = self._wait_for_next_tick()
 
-                if controller.is_timeout(self.COMMAND_TIMEOUT_MS):
-                    if controller.timeout_stop():
-                        self._log_warn(
-                            "Command freshness timeout reached; stopping drivetrain (age_ms=%s timeout_ms=%s)",
-                            controller.command_age_ms(),
-                            self.COMMAND_TIMEOUT_MS,
-                        )
-                        telemetry(
-                            "drivetrain_timeout_stop",
-                            age_ms=controller.command_age_ms(),
-                            timeout_ms=self.COMMAND_TIMEOUT_MS,
-                            last_seq=self._last_command_seq,
-                        )
+                timeout_snapshot = controller.timeout_stop(self.COMMAND_TIMEOUT_MS)
+                if timeout_snapshot is not None:
+                    self._last_command_seq = timeout_snapshot["last_seq"]
+                    self._log_warn(
+                        "Command freshness timeout reached; stopping drivetrain (age_ms=%s timeout_ms=%s seq=%s controller_id=%s)",
+                        timeout_snapshot["age_ms"],
+                        self.COMMAND_TIMEOUT_MS,
+                        timeout_snapshot["last_seq"],
+                        timeout_snapshot["controller_id"],
+                    )
+                    telemetry(
+                        "drivetrain_timeout_stop",
+                        age_ms=timeout_snapshot["age_ms"],
+                        timeout_ms=self.COMMAND_TIMEOUT_MS,
+                        last_seq=timeout_snapshot["last_seq"],
+                        controller_id=timeout_snapshot["controller_id"],
+                    )
                     self.request_stop(reason="command_timeout")
                     continue
 

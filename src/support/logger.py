@@ -39,6 +39,20 @@ uart = UART(
 # ======================================================
 _log_lock = _thread.allocate_lock()
 
+
+def _try_acquire_log_lock():
+    try:
+        return _log_lock.acquire(False)
+    except Exception:
+        return False
+
+
+def _release_log_lock():
+    try:
+        _log_lock.release()
+    except Exception:
+        pass
+
 # ======================================================
 # Tick counter (ESP-IDF style)
 # Used ONLY for UART output
@@ -57,8 +71,12 @@ def _ticks() -> int:
 # ======================================================
 def _uart_write_bytes(data: bytes) -> None:
     try:
-        with _log_lock:
+        if not _try_acquire_log_lock():
+            return
+        try:
             uart.write(data)
+        finally:
+            _release_log_lock()
     except Exception:
         # UART failures must never break firmware
         pass
@@ -86,7 +104,12 @@ def _mirrored_print(*args, **kwargs) -> None:
     end = kwargs.get("end", "\n")
 
     # 1) Original behavior (USB REPL, IDE tools)
-    with _log_lock:
+    if _try_acquire_log_lock():
+        try:
+            _orig_print(*args, **kwargs)
+        finally:
+            _release_log_lock()
+    else:
         _orig_print(*args, **kwargs)
 
     # 2) UART mirror with ticks
@@ -160,8 +183,11 @@ def _log(level: str, tag: str, msg: str) -> None:
     _uart_write_bytes(f"{color}{line}{reset}".encode("utf-8"))
 
     # 2) USB REPL output (NO implicit newline)
-    with _log_lock:
-        _orig_print(f"{color}{line}{reset}", end="")
+    if _try_acquire_log_lock():
+        try:
+            _orig_print(f"{color}{line}{reset}", end="")
+        finally:
+            _release_log_lock()
 
 
 # ======================================================

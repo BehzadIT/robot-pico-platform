@@ -1,8 +1,13 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Upload to Pico" type="micropython-tools-configuration-type" factoryName="micropython-tools-upload-configuration">
+    <option name="excludePaths" value="true" />
+    <option name="excludedPaths">
+      <list>
+        <option value="/AGENTS.md" />
+      </list>
+    </option>
     <option name="path" />
     <option name="synchronize" value="true" />
-    <option name="uploadMode" value="1" />
     <method v="2" />
   </configuration>
 </component>

@@ -26,6 +26,7 @@ ERR_STOP_IN_PROGRESS = "si"
 ERR_RECOVERY_CONFLICT = "rc"
 ERR_RECOVERY_FAILED = "rf"
 ERR_STOP_FAILED = "sf"
+DRIVE_LOG_SAMPLE_MS = 500
 
 
 def _print_exception(exc):
@@ -85,6 +86,21 @@ def _ws_log(event, **data):
     logi("[ws] %s%s" % (event, (" " + safe_data) if safe_data else ""))
 
 
+def _should_log_drive_sample(state, drive_request):
+    now_ms = utime.ticks_ms()
+    last_logged_ms = state.get("last_logged_ms")
+    last_direction = state.get("last_direction")
+    if last_logged_ms is None or last_direction != drive_request.target_direction:
+        state["last_logged_ms"] = now_ms
+        state["last_direction"] = drive_request.target_direction
+        return True
+    if utime.ticks_diff(now_ms, last_logged_ms) >= DRIVE_LOG_SAMPLE_MS:
+        state["last_logged_ms"] = now_ms
+        state["last_direction"] = drive_request.target_direction
+        return True
+    return False
+
+
 async def _send_json(ws, payload):
     await ws.send(ujson.dumps(payload))
 
@@ -115,6 +131,7 @@ def init(app):
     @with_websocket
     async def ws_handler(request, ws):
         controller_id = _controller_id()
+        drive_log_state = {"last_logged_ms": None, "last_direction": None}
         _ws_log("connected", controller_id=controller_id)
         try:
             while True:
@@ -136,34 +153,38 @@ def init(app):
                 if command_type == CMD_DRIVE:
                     try:
                         drive_request = ApiDriveRequest(data)
-                        if not driverController.is_fresh_sequence(drive_request.seq, controller_id):
-                            logw("Rejecting stale or foreign drive seq=%s controller=%s" % (drive_request.seq, controller_id))
-                            await _send_json(ws, {'t': 'e', 'c': ERR_STALE, 's': drive_request.seq})
-                            continue
                         if drive_request.target_rpm == 0:
                             driverController.stop(controller_id=controller_id, reason="drive_deadband_stop")
                             robot_pid.request_stop(seq=drive_request.seq, reason="drive_deadband_stop")
                             _ws_log("drive_deadband_stop", controller_id=controller_id, seq=drive_request.seq)
                             continue
-                        start_result = robot_pid.start(driverController)
-                        if start_result["ok"]:
-                            driverController.drive(drive_request, controller_id=controller_id)
-                            _ws_log(
-                                "drive_start",
-                                controller_id=controller_id,
-                                seq=drive_request.seq,
-                                rpm=drive_request.target_rpm,
-                                angle=drive_request.target_angle,
-                            )
-                        elif start_result["code"] == ERR_RECOVERY_IN_PROGRESS:
+                        drive_result = robot_pid.request_drive(driverController, drive_request, controller_id=controller_id)
+                        if drive_result["ok"]:
+                            if _should_log_drive_sample(drive_log_state, drive_request):
+                                _ws_log(
+                                    "drive_sample",
+                                    controller_id=controller_id,
+                                    seq=drive_request.seq,
+                                    rpm=drive_request.target_rpm,
+                                    angle=drive_request.target_angle,
+                                    direction=drive_request.target_direction,
+                                )
+                        elif drive_result["code"] == ERR_STALE:
+                            logw("Rejecting stale or foreign drive seq=%s controller=%s" % (drive_request.seq, controller_id))
+                            await _send_json(ws, {'t': 'e', 'c': ERR_STALE, 's': drive_request.seq, 'm': drive_result["detail"]})
+                        elif drive_result["code"] == ERR_INVALID_CONTROLLER:
+                            logw("Rejecting drive from non-active controller")
+                            await _send_json(ws, {'t': 'e', 'c': ERR_INVALID_CONTROLLER, 's': drive_request.seq, 'm': drive_result["detail"]})
+                        elif drive_result["code"] == ERR_RECOVERY_IN_PROGRESS:
                             logw("Rejecting drive while drivetrain recovery is in progress")
-                            await _send_json(ws, {'t': 'e', 'c': ERR_RECOVERY_IN_PROGRESS, 's': drive_request.seq, 'm': start_result["detail"]})
-                        elif start_result["code"] == ERR_STOP_IN_PROGRESS:
+                            await _send_json(ws, {'t': 'e', 'c': ERR_RECOVERY_IN_PROGRESS, 's': drive_request.seq, 'm': drive_result["detail"]})
+                        elif drive_result["code"] == ERR_STOP_IN_PROGRESS:
                             logw("Rejecting drive while drivetrain stop is in progress")
-                            await _send_json(ws, {'t': 'e', 'c': ERR_STOP_IN_PROGRESS, 's': drive_request.seq, 'm': start_result["detail"]})
+                            await _send_json(ws, {'t': 'e', 'c': ERR_STOP_IN_PROGRESS, 's': drive_request.seq, 'm': drive_result["detail"]})
                         else:
                             logw("Rejecting drive while drivetrain is faulted")
-                            await _send_json(ws, {'t': 'e', 'c': ERR_HARDWARE_FAULT, 's': drive_request.seq, 'm': start_result["detail"]})
+                            error_code = drive_result["code"] if drive_result.get("code") in (ERR_HARDWARE_FAULT, ERR_INVALID_CONTROLLER, ERR_STOP_IN_PROGRESS) else ERR_HARDWARE_FAULT
+                            await _send_json(ws, {'t': 'e', 'c': error_code, 's': drive_request.seq, 'm': drive_result["detail"]})
                     except Exception as e:
                         loge("Recoverable drive command error: %s" % e)
                         _print_exception(e)
@@ -224,15 +245,16 @@ def init(app):
             driverController.stop(reason="drive_deadband_stop")
             robot_pid.request_stop(seq=drive_request.seq, reason="drive_deadband_stop")
             return {'status': 'stopped'}
-        start_result = robot_pid.start(driverController)
-        if start_result["ok"]:
-            driverController.drive(drive_request)
+        drive_result = robot_pid.request_drive(driverController, drive_request)
+        if drive_result["ok"]:
             return {'status': 'moving forward'}
-        if start_result["code"] == ERR_RECOVERY_IN_PROGRESS:
-            return {'status': 'rejected', 'error': 'recovery_in_progress', 'detail': start_result["detail"]}, 409
-        if start_result["code"] == ERR_STOP_IN_PROGRESS:
-            return {'status': 'rejected', 'error': 'stop_in_progress', 'detail': start_result["detail"]}, 409
-        return {'status': 'faulted', 'error': 'drivetrain_fault', 'detail': start_result["detail"]}, 503
+        if drive_result["code"] == ERR_RECOVERY_IN_PROGRESS:
+            return {'status': 'rejected', 'error': 'recovery_in_progress', 'detail': drive_result["detail"]}, 409
+        if drive_result["code"] == ERR_STOP_IN_PROGRESS:
+            return {'status': 'rejected', 'error': 'stop_in_progress', 'detail': drive_result["detail"]}, 409
+        if drive_result["code"] == ERR_STALE:
+            return {'status': 'rejected', 'error': 'stale_drive', 'detail': drive_result["detail"]}, 409
+        return {'status': 'faulted', 'error': 'drivetrain_fault', 'detail': drive_result["detail"]}, 503
 
     @app.put('/stop')
     def stop(request):
