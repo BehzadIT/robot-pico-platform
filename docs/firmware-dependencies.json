@@ -1,0 +1,50 @@
+[
+  {
+    "name": "microdot",
+    "type": "vendored-third-party",
+    "source_url": "https://github.com/miguelgrinberg/microdot",
+    "pinned_version": "2.5.1",
+    "local_paths": [
+      "lib/microdot/__init__.py",
+      "lib/microdot/helpers.py",
+      "lib/microdot/microdot.py",
+      "lib/microdot/websocket.py"
+    ],
+    "import_name": "microdot",
+    "patched": false,
+    "notes": "Pinned to the official upstream package layout so websocket support comes from microdot.websocket."
+  },
+  {
+    "name": "drivetrain-pid-fork",
+    "type": "project-owned-fork",
+    "source_url": "https://github.com/gastmaier/micropython-simple-pid",
+    "base_source_url": "https://github.com/gastmaier/micropython-simple-pid",
+    "base_version_or_ref": "unverified-fork-base",
+    "pinned_version": "project-owned",
+    "local_paths": [
+      "src/control/pid_fork.py"
+    ],
+    "import_name": "src.control.pid_fork",
+    "patched": true,
+    "local_patches": [
+      "adds independent integral_limits separate from output_limits",
+      "documents and preserves explicit drivetrain timing semantics",
+      "converts dt to seconds before applying Ki and Kd math",
+      "clamps set_auto_mode integral state against integral_limits"
+    ],
+    "notes": "Project-owned drivetrain PID code derived from the MicroPython fork. Treat updates as control-behavior changes that require regression and bench validation."
+  },
+  {
+    "name": "picozero",
+    "type": "vendored-third-party",
+    "source_url": "https://github.com/RaspberryPiFoundation/picozero",
+    "pinned_version": "0.4.2",
+    "local_paths": [
+      "lib/picozero/__init__.py",
+      "lib/picozero/picozero.py"
+    ],
+    "import_name": "picozero",
+    "patched": false,
+    "notes": "Vendored runtime package. Packaging metadata is intentionally not deployed."
+  }
+]

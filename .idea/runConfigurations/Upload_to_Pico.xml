@@ -3,7 +3,13 @@
     <option name="excludePaths" value="true" />
     <option name="excludedPaths">
       <list>
+        <option value="/.gitignore" />
+        <option value="/.idea" />
         <option value="/AGENTS.md" />
+        <option value="/README.md" />
+        <option value="/docs" />
+        <option value="/experiments" />
+        <option value="/services" />
       </list>
     </option>
     <option name="path" />

@@ -1,3 +1,20 @@
+"""Project-owned PID controller fork for drivetrain control.
+
+Origin:
+- Derived from `gastmaier/micropython-simple-pid`
+
+Why this lives under `src/control`:
+- The current implementation is no longer a plain vendored library. It is part
+  of the Pico control stack and its behavior is tuned around the drivetrain's
+  explicit timing assumptions.
+
+Locally maintained behavior changes:
+- adds independent `integral_limits` separate from `output_limits`
+- documents and preserves explicit drivetrain timing semantics
+- converts `dt` to seconds before applying `Ki` and `Kd`
+- clamps `set_auto_mode()` integral state against `integral_limits`
+"""
+
 import utime
 
 
@@ -10,6 +27,7 @@ def _clamp(value, limits):
     elif (lower is not None) and (value < lower):
         return lower
     return value
+
 
 class PID(object):
     """A simple PID controller.
@@ -26,39 +44,37 @@ class PID(object):
         Kd=0.0,
         setpoint=0,
         sample_time=None,
-        scale='ms',
+        scale="ms",
         output_limits=[None, None],
         integral_limits=[None, None],
         auto_mode=True,
         proportional_on_measurement=False,
-        error_map=None
+        error_map=None,
     ):
-        """
-        Initialize a new PID controller.
-        (see your previous docstring for parameter details)
-        """
         self.Kp, self.Ki, self.Kd = Kp, Ki, Kd
         self.setpoint = setpoint
         self.sample_time = sample_time
 
-        def get_scale(x):
+        def get_scale(value):
             return {
-                's' : 'time',
-                'ms': 'ticks_ms',
-                'us': 'ticks_us',
-                'ns': 'time_ns',
-                'cpu':'ticks_cpu'
-            }.get(x, 'time')
+                "s": "time",
+                "ms": "ticks_ms",
+                "us": "ticks_us",
+                "ns": "time_ns",
+                "cpu": "ticks_cpu",
+            }.get(value, "time")
+
         self.scale = get_scale(scale)
 
-        def get_unit(x):
+        def get_unit(value):
             return {
-                's' : 1,
-                'ms': 1e-3,
-                'us': 1e-6,
-                'ns': 1e-9,
-                'cpu':1  # cpu returns value as-is, no real time
-            }.get(x, 1)
+                "s": 1,
+                "ms": 1e-3,
+                "us": 1e-6,
+                "ns": 1e-9,
+                "cpu": 1,  # cpu returns value as-is, no real time
+            }.get(value, 1)
+
         self.unit = get_unit(scale)
 
         if hasattr(utime, self.scale) and callable(func := getattr(utime, self.scale)):
@@ -83,19 +99,11 @@ class PID(object):
         self.reset()
 
     def _dt_to_seconds(self, dt):
-        """
-        Convert a time interval dt from the configured scale to seconds.
-        For 'cpu', returns dt as-is (user must interpret).
-        """
-        if self.scale == 'ticks_cpu':
+        if self.scale == "ticks_cpu":
             return dt
         return float(dt) * self.unit
 
     def __call__(self, input_, dt=None):
-        """
-        Update the PID controller.
-        (see your previous docstring for parameter details)
-        """
         if not self.auto_mode:
             return self._last_output
 
@@ -104,7 +112,7 @@ class PID(object):
             raw_dt = utime.ticks_diff(now, self._last_time) if (self._last_time is not None) else 0
             dt = raw_dt if raw_dt != 0 else 1e-16
         elif dt <= 0:
-            raise ValueError('dt has negative value {}, must be positive'.format(dt))
+            raise ValueError("dt has negative value {}, must be positive".format(dt))
 
         # The drivetrain loop runs in microseconds, but the PID math uses
         # seconds internally so Ki/Kd stay in conventional units.
@@ -140,13 +148,13 @@ class PID(object):
 
     def __repr__(self):
         return (
-            '{self.__class__.__name__}('
-            'Kp={self.Kp!r}, Ki={self.Ki!r}, Kd={self.Kd!r}, '
-            'setpoint={self.setpoint!r}, sample_time={self.sample_time!r}, '
-            'output_limits={self.output_limits!r}, auto_mode={self.auto_mode!r}, '
-            'proportional_on_measurement={self.proportional_on_measurement!r},'
-            'error_map={self.error_map!r}'
-            ')'
+            "{self.__class__.__name__}("
+            "Kp={self.Kp!r}, Ki={self.Ki!r}, Kd={self.Kd!r}, "
+            "setpoint={self.setpoint!r}, sample_time={self.sample_time!r}, "
+            "output_limits={self.output_limits!r}, auto_mode={self.auto_mode!r}, "
+            "proportional_on_measurement={self.proportional_on_measurement!r},"
+            "error_map={self.error_map!r}"
+            ")"
         ).format(self=self)
 
     @property
@@ -197,12 +205,11 @@ class PID(object):
             return
         min_output, max_output = limits
         if (None not in limits) and (max_output < min_output):
-            raise ValueError('lower limit must be less than upper limit')
+            raise ValueError("lower limit must be less than upper limit")
         self._min_output = min_output
         self._max_output = max_output
         self._integral = _clamp(self._integral, self.output_limits)
         self._last_output = _clamp(self._last_output, self.output_limits)
-
 
     @integral_limits.setter
     def integral_limits(self, limits):
@@ -211,7 +218,7 @@ class PID(object):
             return
         min_integral, max_integral = limits
         if (None not in limits) and (max_integral < min_integral):
-            raise ValueError('lower limit must be less than upper limit')
+            raise ValueError("lower limit must be less than upper limit")
         self._min_integral = min_integral
         self._max_integral = max_integral
         self._integral = _clamp(self._integral, self.integral_limits)

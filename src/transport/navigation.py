@@ -3,7 +3,7 @@ from src.control.robot_cross_coupled_pid import robot_pid
 from src.control.robot_drive_controller import driverController
 from src.protocol.request_models import ApiDriveRequest
 from src.support.logging import *
-from lib.websockets import with_websocket
+from microdot.websocket import with_websocket
 import ujson
 import uasyncio as asyncio
 import utime

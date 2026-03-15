@@ -1,6 +1,6 @@
 import micropython
 import machine
-from lib.microdot import Microdot
+from microdot import Microdot
 from src.platform.wifi_connection import connect_wifi
 from src.support.logging import enable_uart_print_mirror, logi
 from src.transport.routes import register_routes

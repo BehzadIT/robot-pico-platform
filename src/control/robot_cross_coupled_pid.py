@@ -16,10 +16,10 @@ import time
 from machine import Pin, PWM, WDT
 
 from settings.config import DRIVETRAIN_CONFIG
-from src.support.logging import logd, loge, logi, logw, telemetry
 from src.control.drivetrain_constants import ControlTiming, MotorLimits, MotorPins, SafetyTiming, SteeringLimits
+from src.control.pid_fork import PID
 from src.hardware.encoder_subsystem import drivetrain_encoders
-from lib.simple_pid import PID
+from src.support.logging import logd, loge, logi, logw, telemetry
 
 
 DRIVETRAIN_TAG = "drivetrain"

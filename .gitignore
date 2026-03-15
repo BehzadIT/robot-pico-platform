@@ -17,7 +17,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -176,6 +175,12 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 /typings/
+
+# Vendored MicroPython runtime dependencies are tracked in-repo.
+# Ignore only local/editor metadata and generated packaging noise inside `lib/`.
+/lib/.micropico
+/lib/.vscode/
+/lib/**/*.dist-info/
 
 # Local Pico secrets stay out of git but are still uploaded from the repo.
 /settings/secrets.py
