@@ -53,7 +53,7 @@ class RobotPID:
     CONTROL_PERIOD_US = ControlTiming.CONTROL_PERIOD_US
     SUMMARY_PERIOD_MS = ControlTiming.SUMMARY_PERIOD_MS
     COMMAND_TIMEOUT_MS = SafetyTiming.COMMAND_TIMEOUT_MS
-    WDT_TIMEOUT_MS = SafetyTiming.WDT_TIMEOUT_MS
+    WDT_TIMEOUT_MS = DRIVETRAIN_CONFIG.get("watchdog_timeout_ms", SafetyTiming.WDT_TIMEOUT_MS)
     STOP_COMPLETION_TIMEOUT_MS = SafetyTiming.STOP_COMPLETION_TIMEOUT_MS
     RECOVER_COMPLETION_TIMEOUT_MS = SafetyTiming.RECOVER_COMPLETION_TIMEOUT_MS
 
@@ -119,6 +119,8 @@ class RobotPID:
         self._last_loop_turning_angle = 0
         self._last_loop_dt_us = 0
         self._watchdog = None
+        self._watchdog_pending_activation_logged = False
+        self._completed_stop_cycles = 0
         self._last_command_seq = -1
         self._pending_stop_seq = None
         self._pending_stop_reason = None
@@ -165,10 +167,22 @@ class RobotPID:
             self._log_info("Drivetrain watchdog disabled by config")
             telemetry("drivetrain_watchdog_disabled")
             return
+        if DRIVETRAIN_CONFIG.get("watchdog_arm_after_first_stop", False) and self._completed_stop_cycles < 1:
+            # Staged rollout: the watchdog stays off until one stop cycle has
+            # already completed cleanly. This avoids arming it during the
+            # riskiest cold-start path and focuses watchdog testing on an
+            # already-working teleop session.
+            if not self._watchdog_pending_activation_logged:
+                self._watchdog_pending_activation_logged = True
+                self._log_info("Drivetrain watchdog deferred until first clean stop cycle")
+                telemetry("drivetrain_watchdog_deferred", reason="awaiting_first_stop")
+            return
         try:
-            self._watchdog = WDT(timeout=self.WDT_TIMEOUT_MS)
-            self._log_info("Drivetrain watchdog enabled (%sms)", self.WDT_TIMEOUT_MS)
-            telemetry("drivetrain_watchdog_enabled", timeout_ms=self.WDT_TIMEOUT_MS)
+            timeout_ms = DRIVETRAIN_CONFIG.get("watchdog_timeout_ms", self.WDT_TIMEOUT_MS)
+            self._watchdog = WDT(timeout=timeout_ms)
+            self._watchdog_pending_activation_logged = False
+            self._log_info("Drivetrain watchdog enabled (%sms)", timeout_ms)
+            telemetry("drivetrain_watchdog_enabled", timeout_ms=timeout_ms)
         except Exception as exc:
             self._log_warn("Unable to enable drivetrain watchdog: %s", exc)
             telemetry("drivetrain_watchdog_unavailable", reason=str(exc))
@@ -274,6 +288,9 @@ class RobotPID:
             self._set_state_locked(self.STATE_STOPPING, reason=reason)
             self._lifecycle_step = "stop_requested"
 
+        # Zero-target stop requests can arrive at high rate while the operator
+        # releases the slider. Keep that path quiet so stop handling stays
+        # cheap and deterministic.
         if reason != "zero_target":
             self._log_info("Stop requested (reason=%s seq=%s)", reason, seq)
             telemetry("drivetrain_stop_requested", reason=reason, seq=seq)
@@ -734,6 +751,7 @@ class RobotPID:
         with self._lock:
             completed_seq = self._pending_stop_seq
             self._completed_stop_seq = completed_seq
+            self._completed_stop_cycles += 1
             self._pending_stop_seq = None
             self._pending_stop_reason = None
             self._last_stop_error = None
@@ -741,6 +759,7 @@ class RobotPID:
                 self._set_state_locked(self.STATE_IDLE, reason="stop_completed")
         self._feed_watchdog()
         self._set_lifecycle_step("stop_cycle_complete")
+        self._ensure_watchdog()
 
     def _recover_cycle(self):
         """Run encoder/motion recovery from the worker thread only."""

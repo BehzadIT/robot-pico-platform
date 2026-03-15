@@ -41,6 +41,9 @@ _log_lock = _thread.allocate_lock()
 
 
 def _try_acquire_log_lock():
+    # Logging must never be able to stall drivetrain control or websocket
+    # handling. If another thread is already in the log path, callers drop
+    # this log write instead of blocking behind the shared lock.
     try:
         return _log_lock.acquire(False)
     except Exception:
@@ -182,7 +185,8 @@ def _log(level: str, tag: str, msg: str) -> None:
     # 1) UART output
     _uart_write_bytes(f"{color}{line}{reset}".encode("utf-8"))
 
-    # 2) USB REPL output (NO implicit newline)
+    # 2) USB REPL output (NO implicit newline). This path also stays
+    # non-blocking so background logging cannot wedge the main firmware loops.
     if _try_acquire_log_lock():
         try:
             _orig_print(f"{color}{line}{reset}", end="")

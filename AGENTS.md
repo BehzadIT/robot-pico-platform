@@ -36,6 +36,7 @@ This repo contains the Pico firmware and control-side logic for the robot.
   - `lib/` for deployed runtime dependency code and vendored libraries used by MicroPython on-device.
   - `settings/` for Pico-side configuration that is uploaded with the firmware.
   - `settings/config.py` for tracked non-secret runtime settings.
+  - `settings/config.py` also owns the staged drivetrain watchdog settings. Keep the watchdog disabled during stabilization unless the current task is explicitly about watchdog rollout.
   - `settings/secrets.py` for local-only secrets such as Wi-Fi credentials; keep it out of git but include it in Pico uploads.
   - `tests/` for retained tests.
   - `experiments/` for bench scripts and temporary tuning work that should not sit at repo root.

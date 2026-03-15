@@ -23,6 +23,11 @@ WIFI_CREDENTIALS = {
 
 `settings/config.py` is versioned and contains non-secret Wi-Fi/runtime settings such as timeouts and retry behavior.
 
+Drivetrain watchdog settings live in `settings/config.py`.
+For rationale and stability notes, see the shared firmware docs:
+- `/home/behzad/Projects/robot-project-docs/firmware/logging-and-telemetry.md`
+- `/home/behzad/Projects/robot-project-docs/firmware/pico-firmware-architecture.md`
+
 Root directory purpose:
 - `main.py`: Pico firmware bootstrap
 - `src/`: project-owned runtime code

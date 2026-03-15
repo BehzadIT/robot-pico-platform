@@ -87,6 +87,9 @@ def _ws_log(event, **data):
 
 
 def _should_log_drive_sample(state, drive_request):
+    # Full-rate drive logging was enough to destabilize teleop on the Pico.
+    # Keep only sampled drive logs plus direction changes so transport logs
+    # stay informative without competing with control timing.
     now_ms = utime.ticks_ms()
     last_logged_ms = state.get("last_logged_ms")
     last_direction = state.get("last_direction")
