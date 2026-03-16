@@ -113,17 +113,17 @@ def _controller_id():
 
 
 def _command_type(data):
-    return data.get("t")
+    return data.get("k")
 
 
 def _command_seq(data):
-    return data.get("s")
+    return data.get("q")
 
 
 def _drive_fault_payload():
     fault = robot_pid.fault_info() or {}
     return {
-        't': 'e',
+        'k': 'e',
         'c': ERR_HARDWARE_FAULT,
         'm': fault.get('message', 'drivetrain fault'),
     }
@@ -147,7 +147,7 @@ def init(app):
                     data = ujson.loads(msg)
                 except Exception as exc:
                     logw("Recoverable protocol error: invalid JSON (%s)" % exc)
-                    await _send_json(ws, {'t': 'e', 'c': ERR_INVALID_JSON})
+                    await _send_json(ws, {'k': 'e', 'c': ERR_INVALID_JSON})
                     continue
 
                 command_type = _command_type(data)
@@ -168,49 +168,51 @@ def init(app):
                                     "drive_sample",
                                     controller_id=controller_id,
                                     seq=drive_request.seq,
+                                    throttle=drive_request.throttle_percent,
+                                    turn=drive_request.turn_percent,
                                     rpm=drive_request.target_rpm,
                                     angle=drive_request.target_angle,
                                     direction=drive_request.target_direction,
                                 )
                         elif drive_result["code"] == ERR_STALE:
                             logw("Rejecting stale or foreign drive seq=%s controller=%s" % (drive_request.seq, controller_id))
-                            await _send_json(ws, {'t': 'e', 'c': ERR_STALE, 's': drive_request.seq, 'm': drive_result["detail"]})
+                            await _send_json(ws, {'k': 'e', 'c': ERR_STALE, 'q': drive_request.seq, 'm': drive_result["detail"]})
                         elif drive_result["code"] == ERR_INVALID_CONTROLLER:
                             logw("Rejecting drive from non-active controller")
-                            await _send_json(ws, {'t': 'e', 'c': ERR_INVALID_CONTROLLER, 's': drive_request.seq, 'm': drive_result["detail"]})
+                            await _send_json(ws, {'k': 'e', 'c': ERR_INVALID_CONTROLLER, 'q': drive_request.seq, 'm': drive_result["detail"]})
                         elif drive_result["code"] == ERR_RECOVERY_IN_PROGRESS:
                             logw("Rejecting drive while drivetrain recovery is in progress")
-                            await _send_json(ws, {'t': 'e', 'c': ERR_RECOVERY_IN_PROGRESS, 's': drive_request.seq, 'm': drive_result["detail"]})
+                            await _send_json(ws, {'k': 'e', 'c': ERR_RECOVERY_IN_PROGRESS, 'q': drive_request.seq, 'm': drive_result["detail"]})
                         elif drive_result["code"] == ERR_STOP_IN_PROGRESS:
                             logw("Rejecting drive while drivetrain stop is in progress")
-                            await _send_json(ws, {'t': 'e', 'c': ERR_STOP_IN_PROGRESS, 's': drive_request.seq, 'm': drive_result["detail"]})
+                            await _send_json(ws, {'k': 'e', 'c': ERR_STOP_IN_PROGRESS, 'q': drive_request.seq, 'm': drive_result["detail"]})
                         else:
                             logw("Rejecting drive while drivetrain is faulted")
                             error_code = drive_result["code"] if drive_result.get("code") in (ERR_HARDWARE_FAULT, ERR_INVALID_CONTROLLER, ERR_STOP_IN_PROGRESS) else ERR_HARDWARE_FAULT
-                            await _send_json(ws, {'t': 'e', 'c': error_code, 's': drive_request.seq, 'm': drive_result["detail"]})
+                            await _send_json(ws, {'k': 'e', 'c': error_code, 'q': drive_request.seq, 'm': drive_result["detail"]})
                     except Exception as e:
                         loge("Recoverable drive command error: %s" % e)
                         _print_exception(e)
-                        await _send_json(ws, {'t': 'e', 'c': ERR_BAD_DRIVE})
+                        await _send_json(ws, {'k': 'e', 'c': ERR_BAD_DRIVE})
                 elif command_type == CMD_STOP:
                     try:
                         did_stop = driverController.stop(controller_id=controller_id)
                         if did_stop:
                             result = robot_pid.request_stop(seq=seq, reason="manual_stop")
                             if not result["ok"]:
-                                await _send_json(ws, {'t': 'e', 'c': result["code"], 's': seq, 'm': result["detail"]})
+                                await _send_json(ws, {'k': 'e', 'c': result["code"], 'q': seq, 'm': result["detail"]})
                             elif await _wait_for_stop_completion(seq):
                                 _ws_log("stop_ack", controller_id=controller_id, seq=seq)
-                                await _send_json(ws, {'t': 'a', 'c': ACK_STOP, 's': seq})
+                                await _send_json(ws, {'k': 'a', 'c': ACK_STOP, 'q': seq})
                             else:
                                 _ws_log("stop_timeout", controller_id=controller_id, seq=seq)
-                                await _send_json(ws, {'t': 'e', 'c': ERR_STOP_FAILED, 's': seq, 'm': 'stop_not_confirmed'})
+                                await _send_json(ws, {'k': 'e', 'c': ERR_STOP_FAILED, 'q': seq, 'm': 'stop_not_confirmed'})
                         else:
-                            await _send_json(ws, {'t': 'e', 'c': ERR_INVALID_CONTROLLER})
+                            await _send_json(ws, {'k': 'e', 'c': ERR_INVALID_CONTROLLER})
                     except Exception as e:
                         loge("Recoverable stop command error: %s" % e)
                         _print_exception(e)
-                        await _send_json(ws, {'t': 'e', 'c': ERR_BAD_STOP})
+                        await _send_json(ws, {'k': 'e', 'c': ERR_BAD_STOP})
                 elif command_type == CMD_RECOVER:
                     try:
                         result = robot_pid.request_recover(seq=seq)
@@ -218,19 +220,19 @@ def init(app):
                             if await _wait_for_recover_completion(seq):
                                 driverController.stop(reason="recovery_complete")
                                 _ws_log("recover_ack", controller_id=controller_id, seq=seq)
-                                await _send_json(ws, {'t': 'a', 'c': ACK_RECOVER, 's': seq})
+                                await _send_json(ws, {'k': 'a', 'c': ACK_RECOVER, 'q': seq})
                             else:
                                 error = robot_pid.recover_error(seq) or {"detail": "recovery_failed"}
-                                await _send_json(ws, {'t': 'e', 'c': ERR_RECOVERY_FAILED, 's': seq, 'm': error["detail"]})
+                                await _send_json(ws, {'k': 'e', 'c': ERR_RECOVERY_FAILED, 'q': seq, 'm': error["detail"]})
                         else:
-                            await _send_json(ws, {'t': 'e', 'c': result["code"], 's': seq, 'm': result["detail"]})
+                            await _send_json(ws, {'k': 'e', 'c': result["code"], 'q': seq, 'm': result["detail"]})
                     except Exception as e:
                         loge("Recoverable recovery command error: %s" % e)
                         _print_exception(e)
-                        await _send_json(ws, {'t': 'e', 'c': ERR_BAD_RECOVER, 's': seq})
+                        await _send_json(ws, {'k': 'e', 'c': ERR_BAD_RECOVER, 'q': seq})
                 else:
                     logw("Recoverable protocol error: unknown command type=%s" % command_type)
-                    await _send_json(ws, {'t': 'e', 'c': ERR_UNKNOWN_COMMAND})
+                    await _send_json(ws, {'k': 'e', 'c': ERR_UNKNOWN_COMMAND})
         except Exception as e:
             loge("WebSocket transport error: %s" % e)
             _print_exception(e)

@@ -4,14 +4,14 @@
 This repo contains the Pico firmware and control-side logic for the robot.
 
 ## Instructions
-- Before changing code here, read the shared docs root at `/home/behzad/Projects/robot-project-docs`.
+- Before changing code here, read the shared docs root at `robot-project-docs`.
 - At minimum, review:
-  - `/home/behzad/Projects/robot-project-docs/overview/current-architecture.md`
-  - `/home/behzad/Projects/robot-project-docs/firmware/pico-firmware-architecture.md`
-  - `/home/behzad/Projects/robot-project-docs/firmware/motor-control-and-encoders.md`
-  - `/home/behzad/Projects/robot-project-docs/firmware/logging-and-telemetry.md`
-  - `/home/behzad/Projects/robot-project-docs/electrical/wiring-and-pinout.md`
-  - `/home/behzad/Projects/robot-project-docs/verification/known-issues-and-open-questions.md`
+  - `robot-project-docs/overview/current-architecture.md`
+  - `robot-project-docs/firmware/pico-firmware-architecture.md`
+  - `robot-project-docs/firmware/motor-control-and-encoders.md`
+  - `robot-project-docs/firmware/logging-and-telemetry.md`
+  - `robot-project-docs/electrical/wiring-and-pinout.md`
+  - `robot-project-docs/verification/known-issues-and-open-questions.md`
 - Preserve the current architectural boundary: the Pico owns real-time control.
 - Be careful around encoder pin assumptions, logging behavior, and REPL compatibility.
 - When making non-trivial decisions, state the relevant best practice, design pattern, technology choice, and architecture tradeoff.
