@@ -36,6 +36,8 @@ Root directory purpose:
 - `docs/`: reference material
 - `experiments/`: non-production exploratory scripts
 
+Pico-specific implementation documentation starts at `docs/README.md`.
+
 ## Dependency Workflow
 This repo uses a vendored dependency model for Pico runtime libraries.
 

@@ -15,6 +15,9 @@ This repo contains the Pico firmware and control-side logic for the robot.
   - `../docs/verification/known-issues-and-open-questions.md`
 - This repository is a submodule of the parent `ai-robot` integration
   workspace, but it keeps its own Git history and release cycle.
+- Pico-specific implementation docs live in `docs/`. Shared system behavior,
+  protocol boundaries, hardware assumptions, and integration risks live in the
+  parent `../docs` tree when available.
 - Preserve the current architectural boundary: the Pico owns real-time control.
 - Be careful around encoder pin assumptions, logging behavior, and REPL compatibility.
 - When making non-trivial decisions, state the relevant best practice, design pattern, technology choice, and architecture tradeoff.
@@ -35,6 +38,9 @@ This repo contains the Pico firmware and control-side logic for the robot.
 - If code changes invalidate the shared docs, update the docs as part of the same work.
 - If the change updates a known-good integrated robot state, update the parent
   repository's submodule pointer after committing this repo.
+- When working from a standalone clone where `../docs` is unavailable, rely on
+  this repo's `docs/` directory and note that parent context could not be
+  checked.
 
 ## Communication Contract
 - For meaningful tasks, give the user a short design note before editing or implementing:
