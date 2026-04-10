@@ -25,8 +25,8 @@ WIFI_CREDENTIALS = {
 
 Drivetrain watchdog settings live in `settings/config.py`.
 For rationale and stability notes, see the shared firmware docs:
-- `robot-project-docs/firmware/logging-and-telemetry.md`
-- `robot-project-docs/firmware/pico-firmware-architecture.md`
+- `../docs/firmware/logging-and-telemetry.md`
+- `../docs/firmware/pico-firmware-architecture.md`
 
 Root directory purpose:
 - `main.py`: Pico firmware bootstrap

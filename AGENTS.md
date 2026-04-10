@@ -4,22 +4,45 @@
 This repo contains the Pico firmware and control-side logic for the robot.
 
 ## Instructions
-- Before changing code here, read the shared docs root at `robot-project-docs`.
+- When working from the parent `ai-robot` workspace, read the shared docs root at
+  `../docs`.
 - At minimum, review:
-  - `robot-project-docs/overview/current-architecture.md`
-  - `robot-project-docs/firmware/pico-firmware-architecture.md`
-  - `robot-project-docs/firmware/motor-control-and-encoders.md`
-  - `robot-project-docs/firmware/logging-and-telemetry.md`
-  - `robot-project-docs/electrical/wiring-and-pinout.md`
-  - `robot-project-docs/verification/known-issues-and-open-questions.md`
+  - `../docs/overview/current-architecture.md`
+  - `../docs/firmware/pico-firmware-architecture.md`
+  - `../docs/firmware/motor-control-and-encoders.md`
+  - `../docs/firmware/logging-and-telemetry.md`
+  - `../docs/electrical/wiring-and-pinout.md`
+  - `../docs/verification/known-issues-and-open-questions.md`
+- This repository is a submodule of the parent `ai-robot` integration
+  workspace, but it keeps its own Git history and release cycle.
 - Preserve the current architectural boundary: the Pico owns real-time control.
 - Be careful around encoder pin assumptions, logging behavior, and REPL compatibility.
 - When making non-trivial decisions, state the relevant best practice, design pattern, technology choice, and architecture tradeoff.
+- Before making any non-trivial code or design change, explicitly tell the user:
+  - the architectural boundary being preserved or changed
+  - the design pattern or control structure being used
+  - the best practice being followed
+  - the software engineering reason for the choice
+  - the robotics/firmware reason for the choice, especially around safety, determinism, timing, fault handling, and hardware ownership
+- For trivial edits, keep this brief but still state whether the change affects control behavior, transport behavior, hardware interaction, or only local code shape.
+- If no named pattern is appropriate, say that directly and explain the simpler engineering rule being applied instead.
 - Prefer reliability-oriented patterns for networking and control paths: explicit state machines, bounded retry/backoff, authoritative failsafes, and structured diagnostics.
+- Favor control-safe patterns such as explicit state machines, clear command-validation boundaries, hardware abstraction seams, watchdog-aware lifecycle handling, and single ownership of safety-critical decisions.
+- When proposing architecture changes, explain why the behavior belongs on the Pico and not on the ESP32 bridge or Android client.
 - Log meaningful transport, protocol, and safety events. Malformed or invalid commands should be treated as recoverable protocol events unless safety requires closing the session.
 - Code documentation matters in this project. Add clear comments or docstrings for non-obvious behavior, especially around lifecycle, protocol semantics, safety behavior, hardware ownership, fault handling, recovery, timing assumptions, and sign conventions.
 - Do not add comments for obvious line-by-line mechanics; document the parts another engineer could misread and accidentally break.
 - If code changes invalidate the shared docs, update the docs as part of the same work.
+- If the change updates a known-good integrated robot state, update the parent
+  repository's submodule pointer after committing this repo.
+
+## Communication Contract
+- For meaningful tasks, give the user a short design note before editing or implementing:
+  - architecture: what layer owns the behavior and why
+  - pattern: state machine, control loop boundary, adapter, composition root, command validation layer, or another concrete choice
+  - best practice: the maintainability, safety, or reliability rule being followed
+  - reasoning: why that choice reduces unsafe coupling, timing regressions, or debugging ambiguity
+- After implementation, summarize whether the result preserved Pico ownership of real-time control and what verification is still needed on hardware, timing, or safety behavior.
 
 ## Structure Pattern
 - Use firmware-oriented structure, not web-app layering names.
