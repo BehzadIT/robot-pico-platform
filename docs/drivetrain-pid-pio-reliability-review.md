@@ -659,7 +659,7 @@ This order is important. Reversing it will produce misleading tuning results and
 - [Pico firmware architecture](../../docs/firmware/pico-firmware-architecture.md)
 - [Motor control and encoders](../../docs/firmware/motor-control-and-encoders.md)
 - [Known issues and open questions](../../docs/verification/known-issues-and-open-questions.md)
-- [Pololu_37D_Encoder_Spec_and_RPM_Test_Code (1).txt](../docs/Pololu_37D_Encoder_Spec_and_RPM_Test_Code%20%281%29.txt)
+- [pololu-37d-encoder-spec-and-rpm-test-code.txt](../../docs/assets/reference/pololu-37d-encoder-spec-and-rpm-test-code.txt)
 - [navigation.py](../server/routes/navigation.py)
 - [robot_drive_controller.py](../services/robot_drive_controller.py)
 - [robot_cross_coupled_pid.py](../services/robot_cross_coupled_pid.py)

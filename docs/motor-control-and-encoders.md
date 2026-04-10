@@ -26,5 +26,5 @@ The docs and wiring notes point to left encoder pins `GP12/13`, while one curren
 ## Sources
 - Code: [robot_cross_coupled_pid.py](../services/robot_cross_coupled_pid.py)
 - Code: [dual_rpm_pio_test.py](../services/dual_rpm_pio_test.py)
-- Source file: [Pololu_37D_Encoder_Spec_and_RPM_Test_Code (1).txt](../docs/Pololu_37D_Encoder_Spec_and_RPM_Test_Code%20%281%29.txt)
-- Source file: [wiring reference.txt](../docs/wiring%20reference.txt)
+- Source file: [pololu-37d-encoder-spec-and-rpm-test-code.txt](../../docs/assets/reference/pololu-37d-encoder-spec-and-rpm-test-code.txt)
+- Source file: [wiring-reference.txt](../../docs/assets/electrical/wiring-reference.txt)

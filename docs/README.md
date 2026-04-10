@@ -13,6 +13,11 @@ repository.
 - `logging-and-telemetry.md`: Pico-side logging and UART telemetry behavior.
 - `drivetrain-pid-pio-reliability-review.md`: detailed reliability review and
   implementation priorities for PID, PIO, timing, and fault handling.
+- `firmware-dependencies.json`: Pico runtime dependency and local fork metadata.
+
+Hardware manuals, wiring notes, component lists, and mechanical images live in
+the parent `../../docs/assets` tree when this repo is checked out inside
+`ai-robot`.
 
 ## Parent Context
 When available, read:
