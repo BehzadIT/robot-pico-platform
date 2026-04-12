@@ -19,3 +19,14 @@ DRIVETRAIN_CONFIG = {
     # and logging bursts so the watchdog only catches real wedges.
     "watchdog_timeout_ms": 4000,
 }
+
+CONTROLLER_UART_CONFIG = {
+    "enabled": True,
+    "uart_id": 1,
+    "baud": 115200,
+    "tx_pin": 4,
+    "rx_pin": 5,
+    "read_chunk": 64,
+    "poll_ms": 10,
+    "diag_sample_ms": 500,
+}

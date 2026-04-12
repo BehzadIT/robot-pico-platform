@@ -5,7 +5,7 @@
 # - USB REPL / IDE output must remain UNCHANGED
 # - All print() output should also go to UART
 # - UART output should include timestamps (ticks)
-# - Structured logs go to UART only
+# - Structured logs should remain visible on both USB REPL and UART
 #
 # IMPORTANT (MicroPython-specific):
 # - MicroPython has NO sys.stdout redirection
@@ -106,17 +106,14 @@ def _mirrored_print(*args, **kwargs) -> None:
     sep = kwargs.get("sep", " ")
     end = kwargs.get("end", "\n")
 
-    # 1) Original behavior (USB REPL, IDE tools)
-    if _try_acquire_log_lock():
-        try:
-            _orig_print(*args, **kwargs)
-        finally:
-            _release_log_lock()
-    else:
-        _orig_print(*args, **kwargs)
+    # Keep USB REPL output on the normal MicroPython path. Decoupling USB from
+    # the logger lock reduces the chance that raw-REPL control traffic gets
+    # tangled up with our mirrored UART logging.
+    _orig_print(*args, **kwargs)
 
     # 2) UART mirror with ticks
-    # NOTE: ticks are added ONLY on UART, never on USB
+    # NOTE: ticks are added ONLY on UART, never on USB. UART remains
+    # serialized because it is the shared telemetry/log transport.
     message = sep.join(str(a) for a in args) + end
     uart_line = f"({_ticks()}) {message}"
 
@@ -185,13 +182,10 @@ def _log(level: str, tag: str, msg: str) -> None:
     # 1) UART output
     _uart_write_bytes(f"{color}{line}{reset}".encode("utf-8"))
 
-    # 2) USB REPL output (NO implicit newline). This path also stays
-    # non-blocking so background logging cannot wedge the main firmware loops.
-    if _try_acquire_log_lock():
-        try:
-            _orig_print(f"{color}{line}{reset}", end="")
-        finally:
-            _release_log_lock()
+    # 2) Keep structured logs visible on USB REPL, but do not route that
+    # output through the shared logger lock. The lock only protects the custom
+    # UART path so REPL/raw-REPL sessions stay as direct as possible.
+    _orig_print(f"{color}{line}{reset}", end="")
 
 
 # ======================================================

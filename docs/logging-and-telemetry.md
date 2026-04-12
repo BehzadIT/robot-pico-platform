@@ -12,6 +12,9 @@ Document the Pico logging architecture and the telemetry contract expected by th
 ### `print()`
 - USB REPL output should remain unchanged.
 - UART copy is prefixed with boot-relative ticks.
+- The normal USB `print()` / REPL stdout path must not be routed through the
+  shared logger lock. Bench verification showed that lock-coupling USB stdout
+  to the custom logger path made `mpremote` raw-REPL entry unreliable.
 
 ### Structured logs
 - `loge`, `logw`, `logi`, `logd`, `logv` emit formatted UART logs.
@@ -31,6 +34,8 @@ failure mode on the Pico.
 
 Rules to preserve:
 - Keep the logger non-blocking across threads.
+- Serialize only the custom UART log transport. Do not serialize normal USB
+  REPL/stdout behind the shared logger lock.
 - Sample high-rate transport logs instead of emitting one line per drive frame.
 - Keep stop/restart paths quiet unless extra logging is needed for a specific
   safety investigation.
@@ -44,6 +49,7 @@ Symptoms that previously pointed at logging trouble:
 
 If teleop becomes unstable again, inspect:
 - global logger lock behavior
+- any change that routes normal USB REPL/stdout through the shared logger lock
 - drive-log sampling behavior in websocket transport
 - new telemetry added in stop/start paths
 - any synchronous print/log loop introduced in worker or route code
