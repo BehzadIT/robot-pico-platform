@@ -9,7 +9,7 @@ Describe the implemented motor-control logic, RPM interpretation, and encoder ha
 - `Needs verification`: actual left encoder pins on the current robot.
 
 ## Motor control behavior
-- Control loop uses target RPM and target angle state from the navigation controller.
+- Control loop uses target RPM and target angle state from the drive command manager's current drive target.
 - The active WebSocket route now exposes signed throttle / turn intent and converts that into internal RPM / direction / angle targets before the control loop runs.
 - HTTP legacy payloads still expose target RPM, target direction, and target angle directly.
 - PID output is converted to signed PWM and then mapped to Cytron PWM/DIR outputs.
@@ -24,7 +24,7 @@ Describe the implemented motor-control logic, RPM interpretation, and encoder ha
 The docs and wiring notes point to left encoder pins `GP12/13`, while one current implementation path uses `GP20/21`. This is a high-priority verification item.
 
 ## Sources
-- Code: [robot_cross_coupled_pid.py](../services/robot_cross_coupled_pid.py)
+- Code: [drivetrain_controller.py](../services/drivetrain_controller.py)
 - Code: [dual_rpm_pio_test.py](../services/dual_rpm_pio_test.py)
 - Source file: [pololu-37d-encoder-spec-and-rpm-test-code.txt](../../docs/assets/reference/pololu-37d-encoder-spec-and-rpm-test-code.txt)
 - Source file: [wiring-reference.txt](../../docs/assets/electrical/wiring-reference.txt)

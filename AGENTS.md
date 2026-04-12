@@ -88,7 +88,7 @@ This repo contains the Pico firmware and control-side logic for the robot.
   - `settings/secrets.py` for local-only secrets that are uploaded to the Pico.
   - `src/transport/` for the websocket route handlers and session handling.
   - `src/protocol/` for request models, command parsing, protocol constants, and ack/error payload helpers.
-  - `src/control/` for navigation controller, PID orchestration, drivetrain policy, and safety timing logic.
+  - `src/control/` for drive command management, drive targets, PID orchestration, drivetrain policy, and safety timing logic.
   - `src/hardware/` for encoder and hardware-bound modules.
   - `src/platform/` for Wi-Fi and MicroPython runtime-specific integration.
   - `src/support/` for logging and narrow shared helpers.

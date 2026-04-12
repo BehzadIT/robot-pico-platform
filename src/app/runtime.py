@@ -3,7 +3,7 @@ import machine
 from microdot import Microdot
 from src.platform.wifi_connection import connect_wifi
 from src.support.logging import enable_uart_print_mirror, logi
-from src.transport.controller_uart import start_controller_uart_receiver
+from src.transport.joystick_uart_receiver import start_joystick_uart_receiver
 from src.transport.routes import register_routes
 
 
@@ -29,8 +29,8 @@ def run():
     logi("Boot reset cause: %s" % _reset_cause_name())
     app = Microdot()
     register_routes(app)
-    if not start_controller_uart_receiver():
-        logi("Continuing boot without controller UART receiver")
+    if not start_joystick_uart_receiver():
+        logi("Continuing boot without joystick UART receiver")
     connect_wifi()
     logi("Starting server...")
     app.run(debug=False, port=80)

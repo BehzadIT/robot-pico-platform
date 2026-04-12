@@ -2,7 +2,7 @@ import struct
 
 import utime
 
-from src.protocol.controller_snapshot import ControllerSnapshotV1
+from src.protocol.joystick_snapshot import JoystickSnapshot
 
 FRAME_MAGIC = b"\xA5\x5A"
 FRAME_VERSION = 0x01
@@ -28,7 +28,7 @@ def crc16_ccitt(data):
     return crc
 
 
-def decode_snapshot_payload(payload, received_at_ms=None):
+def decode_joystick_snapshot_payload(payload, received_at_ms=None):
     if len(payload) != SNAPSHOT_PAYLOAD_LEN:
         raise ValueError("unexpected_snapshot_payload_length")
 
@@ -36,7 +36,7 @@ def decode_snapshot_payload(payload, received_at_ms=None):
         received_at_ms = utime.ticks_ms()
 
     unpacked = struct.unpack(_PAYLOAD_FORMAT, payload)
-    return ControllerSnapshotV1(
+    return JoystickSnapshot(
         seq=unpacked[0],
         source_uptime_ms=unpacked[1],
         connected=(unpacked[2] & SNAPSHOT_FLAG_CONNECTED) != 0,
@@ -53,8 +53,12 @@ def decode_snapshot_payload(payload, received_at_ms=None):
     )
 
 
-class ControllerFrameParser:
-    """Stateful framed parser with resync on the fixed magic bytes."""
+class JoystickFrameParser:
+    """Stateful framed parser for joystick snapshots received over UART.
+
+    The parser owns byte-stream resynchronization and CRC validation. It does
+    not interpret the joystick values as drive commands or robot behavior.
+    """
 
     def __init__(self):
         self._buffer = bytearray()
@@ -92,15 +96,14 @@ class ControllerFrameParser:
                 continue
 
             frame = bytes(self._buffer[:FRAME_LEN])
-            payload = frame[FRAME_HEADER_LEN:FRAME_HEADER_LEN + SNAPSHOT_PAYLOAD_LEN]
+            payload = frame[FRAME_HEADER_LEN : FRAME_HEADER_LEN + SNAPSHOT_PAYLOAD_LEN]
             expected_crc = frame[-2] | (frame[-1] << 8)
             actual_crc = crc16_ccitt(frame[2:-2])
             if actual_crc != expected_crc:
                 self._drop_prefix(1)
                 continue
 
-            # A repeated seq is still a valid fresh frame in this transport.
-            # ESP32 uses source_uptime_ms as the heartbeat/freshness signal
-            # when the controller state itself has not changed.
-            snapshots.append(decode_snapshot_payload(payload, received_at_ms=received_at_ms))
+            snapshots.append(
+                decode_joystick_snapshot_payload(payload, received_at_ms=received_at_ms)
+            )
             self._drop_prefix(FRAME_LEN)

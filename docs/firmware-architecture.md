@@ -17,9 +17,9 @@ Describe the current Raspberry Pi Pico firmware structure and runtime responsibi
 - It starts the HTTP server on port `80`.
 
 ## Key modules
-- `src/transport/navigation.py`: HTTP and WebSocket control endpoints
-- `src/control/robot_drive_controller.py`: navigation target state and stop handling
-- `src/control/robot_cross_coupled_pid.py`: drive loop, PWM output, encoder reads
+- `src/transport/mobile_app_transport.py`: mobile-app-facing HTTP and WebSocket control endpoints
+- `src/control/drive_command_manager.py`: drive command admission, source ownership, and drive target handoff
+- `src/control/drivetrain_controller.py`: drive loop, PWM output, encoder reads
 - `src/support/logger.py`: REPL-safe logging implementation
 - `src/platform/wifi_connection.py`: station-mode Wi-Fi join logic
 
@@ -40,6 +40,6 @@ the first clean stop cycle instead of arming immediately at startup.
 
 ## Sources
 - Code: [main.py](../main.py)
-- Code: [navigation.py](../src/transport/navigation.py)
-- Code: [robot_drive_controller.py](../src/control/robot_drive_controller.py)
-- Code: [robot_cross_coupled_pid.py](../src/control/robot_cross_coupled_pid.py)
+- Code: [mobile_app_transport.py](../src/transport/mobile_app_transport.py)
+- Code: [drive_command_manager.py](../src/control/drive_command_manager.py)
+- Code: [drivetrain_controller.py](../src/control/drivetrain_controller.py)

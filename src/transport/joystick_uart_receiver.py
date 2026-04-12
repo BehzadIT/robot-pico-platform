@@ -4,7 +4,7 @@ import utime
 from machine import Pin, UART
 
 from settings.config import CONTROLLER_UART_CONFIG
-from src.protocol.controller_transport import ControllerFrameParser
+from src.protocol.joystick_transport import JoystickFrameParser
 from src.support.logging import loge, logi, logw
 
 _lock = _thread.allocate_lock()
@@ -79,12 +79,12 @@ def _released_names(previous, current, mapping):
     return _names_from_bits(changed, mapping)
 
 
-def latest_controller_snapshot():
+def latest_joystick_snapshot():
     with _lock:
         return _latest_snapshot
 
 
-def controller_uart_status_snapshot():
+def joystick_uart_status_snapshot():
     with _lock:
         return _copy_status()
 
@@ -122,7 +122,9 @@ def _log_input_transition(previous, current):
         parts.append("released=%s" % ("[" + ",".join(released) + "]"))
 
     misc_pressed = _pressed_names(previous.misc_buttons, current.misc_buttons, _MISC_BUTTON_NAMES)
-    misc_released = _released_names(previous.misc_buttons, current.misc_buttons, _MISC_BUTTON_NAMES)
+    misc_released = _released_names(
+        previous.misc_buttons, current.misc_buttons, _MISC_BUTTON_NAMES
+    )
     if misc_pressed:
         parts.append("misc_pressed=%s" % ("[" + ",".join(misc_pressed) + "]"))
     if misc_released:
@@ -138,7 +140,7 @@ def _log_input_transition(previous, current):
     if not parts:
         return
 
-    logi("Controller UART input seq=%s %s" % (current.seq, " ".join(parts)))
+    logi("Joystick UART input seq=%s %s" % (current.seq, " ".join(parts)))
 
 
 def _analog_changed(previous_value, current_value, threshold):
@@ -208,19 +210,21 @@ def _log_snapshot_delta(previous, current):
             )
         if _trigger_changed(previous.left_trigger, current.left_trigger, _TRIGGER_DELTA_THRESHOLD):
             changed_parts.append("left_trigger=%s" % current.left_trigger)
-        if _trigger_changed(previous.right_trigger, current.right_trigger, _TRIGGER_DELTA_THRESHOLD):
+        if _trigger_changed(
+            previous.right_trigger, current.right_trigger, _TRIGGER_DELTA_THRESHOLD
+        ):
             changed_parts.append("right_trigger=%s" % current.right_trigger)
 
     if not changed_parts:
         return
 
     age_ms = utime.ticks_diff(utime.ticks_ms(), current.received_at_ms)
-    logi("Controller UART input seq=%s %s age_ms=%s" % (current.seq, " ".join(changed_parts), age_ms))
+    logi("Joystick UART input seq=%s %s age_ms=%s" % (current.seq, " ".join(changed_parts), age_ms))
 
 
 def _receiver_loop():
     cfg = CONTROLLER_UART_CONFIG
-    parser = ControllerFrameParser()
+    parser = JoystickFrameParser()
     uart = UART(
         cfg["uart_id"],
         cfg["baud"],
@@ -231,7 +235,7 @@ def _receiver_loop():
         _status["started"] = True
 
     logi(
-        "Controller UART receiver started uart=%s tx=%s rx=%s baud=%s"
+        "Joystick UART receiver started uart=%s tx=%s rx=%s baud=%s"
         % (cfg["uart_id"], cfg["tx_pin"], cfg["rx_pin"], cfg["baud"])
     )
 
@@ -252,16 +256,16 @@ def _receiver_loop():
 
             utime.sleep_ms(cfg["poll_ms"])
         except Exception as exc:
-            logw("Controller UART receiver loop error: %s" % exc)
+            logw("Joystick UART receiver loop error: %s" % exc)
             utime.sleep_ms(100)
 
 
-def start_controller_uart_receiver():
+def start_joystick_uart_receiver():
     global _receiver_started
 
     cfg = CONTROLLER_UART_CONFIG
     if not cfg.get("enabled", False):
-        logi("Controller UART receiver disabled by config")
+        logi("Joystick UART receiver disabled by config")
         return True
 
     if _receiver_started:
@@ -272,5 +276,5 @@ def start_controller_uart_receiver():
         _receiver_started = True
         return True
     except Exception as exc:
-        loge("Failed to start controller UART receiver: %s" % exc)
+        loge("Failed to start joystick UART receiver: %s" % exc)
         return False

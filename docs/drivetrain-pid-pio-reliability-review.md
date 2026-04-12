@@ -74,22 +74,22 @@ Design consequence:
 
 ## Current System Review
 
-## Layer 1: Command Ingress And Navigation State
+## Layer 1: Command Ingress And Drive Target State
 Current code path:
 - Android sends WebSocket drive and stop commands to the Pico.
-- Pico route handlers update navigation state through `driverController`.
+- Pico route handlers update drive-target state through `drive_command_manager`.
 - The PID loop reads that state and drives the motors.
 
 Relevant code:
-- [navigation.py](../server/routes/navigation.py)
-- [robot_drive_controller.py](../services/robot_drive_controller.py)
+- [mobile_app_transport.py](../server/routes/mobile_app_transport.py)
+- [drive_command_manager.py](../services/drive_command_manager.py)
 - [NavigationWebSocketApi.kt](../../robot-android-app/app/src/main/java/com/bizi/roboapp/core/transport/NavigationWebSocketApi.kt)
 
 Observed behavior:
 - the Android app currently sends signed throttle / turn intent over WebSocket
 - the Pico request model currently parses `k`, `t`, `r`, `q`, and `w`
 - the Pico transport derives RPM / direction / angle from the intent payload before the worker loop runs
-- `RobotNavigationController.accept_drive_request()` updates RPM, direction, and angle together
+- `DriveCommandManager.accept_drive_request()` updates RPM, direction, and angle together
 - the PID loop reads `target_angle`, and live drive traffic now sets it through the derived turn command
 
 Effect:
@@ -129,10 +129,10 @@ Reliability reason:
 
 ## Layer 2: Control-Loop Lifetime
 Relevant code:
-- [robot_cross_coupled_pid.py](../services/robot_cross_coupled_pid.py)
+- [drivetrain_controller.py](../services/drivetrain_controller.py)
 
 Observed behavior:
-- `robot_pid` is a singleton object
+- `drivetrain_controller` is a singleton object
 - `start()` launches a new `_thread`
 - `terminate_thread()` sets a flag and immediately stops motors
 - `is_running()` is inferred only from `terminate_flag`
@@ -198,7 +198,7 @@ Documentation rule:
 
 ## Layer 3: PID Controller Logic
 Relevant code:
-- [robot_cross_coupled_pid.py](../services/robot_cross_coupled_pid.py)
+- [drivetrain_controller.py](../services/drivetrain_controller.py)
 - [PID.py](../services/simple_pid/PID.py)
 
 Observed behavior:
@@ -229,7 +229,7 @@ Reactiveness impact:
 
 ## Layer 4: Measurement And Timing
 Relevant code:
-- [robot_cross_coupled_pid.py](../services/robot_cross_coupled_pid.py)
+- [drivetrain_controller.py](../services/drivetrain_controller.py)
 - [dual_rpm_pio_test.py](../services/dual_rpm_pio_test.py)
 
 Observed behavior:
@@ -261,7 +261,7 @@ Reactiveness impact:
 ## Layer 5: PIO Encoder Ownership
 Relevant code:
 - [dual_rpm_pio_test.py](../services/dual_rpm_pio_test.py)
-- [robot_cross_coupled_pid.py](../services/robot_cross_coupled_pid.py)
+- [drivetrain_controller.py](../services/drivetrain_controller.py)
 
 Observed behavior:
 - the encoder module creates global `PIOQuadratureCounter` instances at import time
@@ -288,7 +288,7 @@ Reactiveness impact:
 
 ## Layer 6: PWM Output Handling
 Relevant code:
-- [robot_cross_coupled_pid.py](../services/robot_cross_coupled_pid.py)
+- [drivetrain_controller.py](../services/drivetrain_controller.py)
 
 Observed behavior:
 - PWM objects are created once, which is good
@@ -660,9 +660,9 @@ This order is important. Reversing it will produce misleading tuning results and
 - [Motor control and encoders](../../docs/firmware/motor-control-and-encoders.md)
 - [Known issues and open questions](../../docs/verification/known-issues-and-open-questions.md)
 - [pololu-37d-encoder-spec-and-rpm-test-code.txt](../../docs/assets/reference/pololu-37d-encoder-spec-and-rpm-test-code.txt)
-- [navigation.py](../server/routes/navigation.py)
-- [robot_drive_controller.py](../services/robot_drive_controller.py)
-- [robot_cross_coupled_pid.py](../services/robot_cross_coupled_pid.py)
+- [mobile_app_transport.py](../server/routes/mobile_app_transport.py)
+- [drive_command_manager.py](../services/drive_command_manager.py)
+- [drivetrain_controller.py](../services/drivetrain_controller.py)
 - [PID.py](../services/simple_pid/PID.py)
 - [dual_rpm_pio_test.py](../services/dual_rpm_pio_test.py)
 - [NavigationWebSocketApi.kt](../../robot-android-app/app/src/main/java/com/bizi/roboapp/core/transport/NavigationWebSocketApi.kt)

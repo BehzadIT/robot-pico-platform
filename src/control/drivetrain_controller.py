@@ -25,12 +25,13 @@ from src.support.logging import logd, loge, logi, logw, telemetry
 DRIVETRAIN_TAG = "drivetrain"
 
 
-class RobotPID:
-    """Long-lived drivetrain controller for the two tracked motors.
+class DrivetrainController:
+    """Own the closed-loop drivetrain worker, faults, and motor outputs.
 
-    This class owns the control-loop lifecycle, motor outputs, and PID state.
-    The encoder hardware itself is owned by `encoder_subsystem.py`; this class
-    consumes already-owned measurements and turns them into PWM updates.
+    This class is the Pico's real drivetrain controller. It consumes accepted
+    robot-level drive targets from `DriveCommandManager`, reads encoder
+    measurements from `encoder_subsystem.py`, and turns them into safe motor
+    updates and drivetrain state transitions.
     """
     PWM_RIGHT = PWM(Pin(MotorPins.RIGHT_PWM))
     DIR_RIGHT = Pin(MotorPins.RIGHT_DIR, Pin.OUT)
@@ -70,7 +71,7 @@ class RobotPID:
         # unrelated status reads.
         self._lock = _thread.allocate_lock()
         self._worker_started = False
-        self._driver_controller = None
+        self._drive_command_manager = None
         self._state = self.STATE_IDLE
         self._fault = None
         self._last_fault = None
@@ -155,7 +156,7 @@ class RobotPID:
     def _ensure_watchdog(self):
         """Arm the watchdog only once the drivetrain startup path is healthy.
 
-        `robot_pid` is instantiated during route registration, before Wi-Fi
+        `drivetrain_controller` is instantiated during route registration, before Wi-Fi
         connect and server startup. We also defer WDT creation until the worker
         has successfully completed encoder/startup preparation. That keeps the
         watchdog focused on active drivetrain sessions and avoids hiding
@@ -380,7 +381,7 @@ class RobotPID:
         """Compatibility wrapper retained for existing route callers."""
         return self.request_recover()
 
-    def start(self, navigation_controller):
+    def start(self, drive_command_manager):
         """Ensure the persistent worker exists and request the running state.
 
         Recovery is exclusive: while `recovering`, no new drive start may
@@ -403,7 +404,7 @@ class RobotPID:
                 self._log_warn("Ignoring start request while stop is in progress")
                 return {"ok": False, "code": "si", "detail": "stop in progress"}
 
-            self._driver_controller = navigation_controller
+            self._drive_command_manager = drive_command_manager
 
             if not self._worker_started:
                 self._worker_started = True
@@ -423,7 +424,7 @@ class RobotPID:
 
         return {"ok": True}
 
-    def request_drive(self, navigation_controller, drive_request, controller_id=None):
+    def request_drive(self, drive_command_manager, drive_request, command_source_id=None):
         """Accept one drive request with guarded admission semantics.
 
         The transport layer should not stage `start()` and controller mutation
@@ -441,24 +442,38 @@ class RobotPID:
             if self._state == self.STATE_STOPPING:
                 self._log_warn("Ignoring drive request while stop is in progress")
                 return {"ok": False, "code": "si", "detail": "stop in progress"}
-            self._driver_controller = navigation_controller
+            self._drive_command_manager = drive_command_manager
             if not self._worker_started:
                 self._worker_started = True
                 should_start_worker = True
 
-        drive_result = navigation_controller.accept_drive_request(drive_request, controller_id=controller_id)
+        drive_result = drive_command_manager.accept_drive_request(
+            drive_request, command_source_id=command_source_id
+        )
         if not drive_result["ok"]:
             return drive_result
 
         with self._lock:
             if self._state == self.STATE_FAULTED:
-                navigation_controller.revoke_drive_request(drive_request.seq, controller_id=controller_id, reason="faulted_after_accept")
+                drive_command_manager.revoke_drive_request(
+                    drive_request.seq,
+                    command_source_id=command_source_id,
+                    reason="faulted_after_accept",
+                )
                 return {"ok": False, "code": "hf", "detail": "drivetrain faulted"}
             if self._state == self.STATE_RECOVERING:
-                navigation_controller.revoke_drive_request(drive_request.seq, controller_id=controller_id, reason="recovering_after_accept")
+                drive_command_manager.revoke_drive_request(
+                    drive_request.seq,
+                    command_source_id=command_source_id,
+                    reason="recovering_after_accept",
+                )
                 return {"ok": False, "code": "ri", "detail": "recovery in progress"}
             if self._state == self.STATE_STOPPING:
-                navigation_controller.revoke_drive_request(drive_request.seq, controller_id=controller_id, reason="stopping_after_accept")
+                drive_command_manager.revoke_drive_request(
+                    drive_request.seq,
+                    command_source_id=command_source_id,
+                    reason="stopping_after_accept",
+                )
                 return {"ok": False, "code": "si", "detail": "stop in progress"}
             if self._state != self.STATE_RUNNING:
                 self._set_state_locked(self.STATE_STARTING, reason="drive_requested")
@@ -469,7 +484,11 @@ class RobotPID:
             except Exception as exc:
                 with self._lock:
                     self._worker_started = False
-                navigation_controller.revoke_drive_request(drive_request.seq, controller_id=controller_id, reason="worker_start_failed")
+                drive_command_manager.revoke_drive_request(
+                    drive_request.seq,
+                    command_source_id=command_source_id,
+                    reason="worker_start_failed",
+                )
                 self._latch_fault("worker_start_failed", exc)
                 return {"ok": False, "code": "hf", "detail": "worker start failed"}
 
@@ -808,9 +827,9 @@ class RobotPID:
             try:
                 self._set_lifecycle_step("worker_wait")
                 state = self.state()
-                controller = self._driver_controller
+                drive_command_manager = self._drive_command_manager
 
-                if controller is None or state == self.STATE_IDLE:
+                if drive_command_manager is None or state == self.STATE_IDLE:
                     time.sleep_ms(20)
                     continue
 
@@ -839,31 +858,31 @@ class RobotPID:
                 self._set_lifecycle_step("running_wait_tick")
                 tick_us = self._wait_for_next_tick()
 
-                timeout_snapshot = controller.timeout_stop(self.COMMAND_TIMEOUT_MS)
+                timeout_snapshot = drive_command_manager.timeout_stop(self.COMMAND_TIMEOUT_MS)
                 if timeout_snapshot is not None:
                     self._last_command_seq = timeout_snapshot["last_seq"]
                     self._log_warn(
-                        "Command freshness timeout reached; stopping drivetrain (age_ms=%s timeout_ms=%s seq=%s controller_id=%s)",
+                        "Command freshness timeout reached; stopping drivetrain (age_ms=%s timeout_ms=%s seq=%s command_source_id=%s)",
                         timeout_snapshot["age_ms"],
                         self.COMMAND_TIMEOUT_MS,
                         timeout_snapshot["last_seq"],
-                        timeout_snapshot["controller_id"],
+                        timeout_snapshot["command_source_id"],
                     )
                     telemetry(
                         "drivetrain_timeout_stop",
                         age_ms=timeout_snapshot["age_ms"],
                         timeout_ms=self.COMMAND_TIMEOUT_MS,
                         last_seq=timeout_snapshot["last_seq"],
-                        controller_id=timeout_snapshot["controller_id"],
+                        command_source_id=timeout_snapshot["command_source_id"],
                     )
                     self.request_stop(reason="command_timeout")
                     continue
 
-                navigation_params = controller.get_navigation_params()
-                signed_rpm_setpoint = navigation_params.get_signed_target_rpm()
-                turning_angle = navigation_params.target_angle
+                drive_target = drive_command_manager.get_drive_target()
+                signed_rpm_setpoint = drive_target.get_signed_target_rpm()
+                turning_angle = drive_target.target_angle
                 target_sign = self._sign(signed_rpm_setpoint)
-                self._last_command_seq = navigation_params.last_seq
+                self._last_command_seq = drive_target.last_seq
 
                 if self.test_mode:
                     signed_rpm_setpoint = 330
@@ -896,7 +915,7 @@ class RobotPID:
                     self._last_loop_measurement = measurement
                     self._last_loop_target_rpm = signed_rpm_setpoint
                     self._last_loop_turning_angle = turning_angle
-                    measurement["command_age_ms"] = navigation_params.command_age_ms
+                    measurement["command_age_ms"] = drive_target.command_age_ms
                     self._emit_loop_summary()
                     continue
 
@@ -951,4 +970,4 @@ class RobotPID:
                 self._feed_watchdog()
 
 
-robot_pid = RobotPID()
+drivetrain_controller = DrivetrainController()

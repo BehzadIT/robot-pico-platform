@@ -1,8 +1,9 @@
-class ControllerSnapshotV1:
-    """Receive-side DTO for ESP32 controller snapshots.
+class JoystickSnapshot:
+    """Receive-side DTO for one joystick frame from the ESP32 bridge.
 
-    This stays transport-oriented in Phase 2. It intentionally does not assign
-    robot meaning to the controls yet.
+    This class stays transport-oriented. It captures one sampled joystick state
+    plus transport metadata without assigning robot-level meaning to the
+    controls.
     """
 
     def __init__(
