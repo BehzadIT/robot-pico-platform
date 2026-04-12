@@ -33,7 +33,7 @@ Describe the current Raspberry Pi Pico firmware structure and runtime responsibi
 
 ## Notes
 The Pico firmware is currently both the real-time controller and the live control server. That is a current implementation fact even if future architecture changes move command routing elsewhere.
-The shared upload workflow should target the real firmware paths (`main.py`, `src/`, `lib/`, `settings/`) rather than a mirrored deploy tree.
+The shared upload workflow targets the real firmware paths (`main.py`, `src/`, `lib/`, `settings/`) via `tools/pico_deploy.py` and root-relative exclusions from `.picodeployignore`, rather than a mirrored deploy tree.
 Drivetrain watchdog settings are owned by `settings/config.py` and are rolled
 out in stages. The current safe pattern is to defer watchdog arming until after
 the first clean stop cycle instead of arming immediately at startup.

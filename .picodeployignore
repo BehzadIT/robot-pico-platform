@@ -1,0 +1,28 @@
+# Pico deploy exclusions are relative to the repository root.
+# Only the managed roots are considered for deployment:
+# main.py, src/, lib/, settings/
+
+# Existing non-firmware or non-deployable content
+docs/**
+experiments/**
+services/**
+tests/**
+typings/**
+wifi/**
+
+# Workspace and metadata
+.idea/**
+.micropico
+AGENTS.md
+README.md
+robot-pico-platform.code-workspace
+.gitignore
+
+# Generated files
+**/__pycache__/**
+**/*.pyc
+**/*.pyo
+**/*.dist-info/**
+
+# Optional local overrides
+settings/__pycache__/**

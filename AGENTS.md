@@ -15,6 +15,10 @@ This repo contains the Pico firmware and control-side logic for the robot.
   - `../docs/verification/known-issues-and-open-questions.md`
 - This repository is a submodule of the parent `ai-robot` integration
   workspace, but it keeps its own Git history and release cycle.
+- Use `./tools/pico_deploy.py` as the default Pico upload workflow.
+- The default Pico port is `/dev/ttyACM0`; do not add `--port` unless the board is on a different device node.
+- The deploy script is the source of truth for Pico uploads: it kills stale local holders of the serial port, uploads only changed managed files, deletes stale managed paths on-device, then opens a live serial session and triggers the soft reboot from that attached session so startup logs remain visible.
+- The deploy output should stay concise. Prefer high-signal state lines plus the files actually updated on the Pico, followed by live boot/REPL output.
 - Pico-specific implementation docs live in `docs/`. Shared system behavior,
   protocol boundaries, hardware assumptions, and integration risks live in the
   parent `../docs` tree when available.

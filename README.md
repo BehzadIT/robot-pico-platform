@@ -1,7 +1,27 @@
 # robot-pico-platform
 
 ## Pico Deploy
-The Pico is uploaded from the real firmware paths via the shared `Upload to Pico` MicroPython run configuration.
+Use the tracked CLI deploy script:
+
+```bash
+python3 tools/pico_deploy.py
+```
+
+Optional port override:
+
+```bash
+python3 tools/pico_deploy.py --port /dev/ttyACM0
+```
+
+Deploy behavior:
+- Managed deploy roots are `main.py`, `src/`, `lib/`, and `settings/`.
+- Default port is `/dev/ttyACM0`; use `--port` only when needed.
+- Exclusions come from `.picodeployignore`.
+- The script kills stale local port holders before deploy.
+- It compares staged files against Pico-side SHA-256 hashes, uploads only changed files, deletes stale managed paths, then opens a live serial session and triggers the soft reboot from that attached session.
+- Terminal output is intentionally concise: high-signal deploy states, then only the files that were actually updated, then live Pico boot/REPL output.
+- If deploy fails, the script can interactively try recovery in order: soft reset, hard reset, clear Pico data, then retry.
+- Exit the attached session with `Ctrl-]` or `Ctrl-X`.
 
 Uploaded firmware paths:
 - `main.py`
@@ -12,7 +32,7 @@ Uploaded firmware paths:
 Local-only device file:
 - `settings/secrets.py`
 
-`settings/secrets.py` must exist on your machine before upload and must define:
+`settings/secrets.py` must exist on your machine before upload unless you explicitly exclude it in `.picodeployignore`. It must define:
 
 ```python
 WIFI_CREDENTIALS = {
@@ -55,7 +75,7 @@ Normal update flow:
 3. Update `docs/firmware-dependencies.json` with the pinned version, source URL, and local paths.
 4. Remove packaging/editor artifacts that should not be uploaded to the Pico.
 5. Run local smoke checks and verify imports.
-6. Upload with the shared `Upload to Pico` configuration.
+6. Upload with `python3 tools/pico_deploy.py`.
 7. Verify boot, Wi-Fi join, transport startup, and logging behavior on-device.
 
 Microdot note:
