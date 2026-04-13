@@ -14,6 +14,8 @@ repository.
 - `drivetrain-pid-pio-reliability-review.md`: detailed reliability review and
   implementation priorities for PID, PIO, timing, and fault handling.
 - `firmware-dependencies.json`: Pico runtime dependency and local fork metadata.
+- `code-documentation.md`: how to document MicroPython control, transport, and
+  safety code without obscuring timing-critical behavior.
 
 Hardware manuals, wiring notes, component lists, and mechanical images live in
 the parent `../../docs/assets` tree when this repo is checked out inside

@@ -13,6 +13,7 @@ This repo contains the Pico firmware and control-side logic for the robot.
   - `../docs/firmware/logging-and-telemetry.md`
   - `../docs/electrical/wiring-and-pinout.md`
   - `../docs/verification/known-issues-and-open-questions.md`
+  - `docs/code-documentation.md`
 - This repository is a submodule of the parent `ai-robot` integration
   workspace, but it keeps its own Git history and release cycle.
 - Use `./tools/pico_deploy.py` as the default Pico upload workflow.
@@ -38,6 +39,7 @@ This repo contains the Pico firmware and control-side logic for the robot.
 - When proposing architecture changes, explain why the behavior belongs on the Pico and not on the ESP32 bridge or Android client.
 - Log meaningful transport, protocol, and safety events. Malformed or invalid commands should be treated as recoverable protocol events unless safety requires closing the session.
 - Code documentation matters in this project. Add clear comments or docstrings for non-obvious behavior, especially around lifecycle, protocol semantics, safety behavior, hardware ownership, fault handling, recovery, timing assumptions, and sign conventions.
+- Follow `docs/code-documentation.md` for repo-local documentation style and examples.
 - Do not add comments for obvious line-by-line mechanics; document the parts another engineer could misread and accidentally break.
 - If code changes invalidate the shared docs, update the docs as part of the same work.
 - If the change updates a known-good integrated robot state, update the parent
