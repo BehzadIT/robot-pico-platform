@@ -30,6 +30,28 @@ class ApiDriveRequest:
         self.throttle_percent = self._rpm_to_percent(self.target_rpm, self.target_direction)
         self.turn_percent = self._angle_to_percent(self.target_angle)
 
+    @classmethod
+    def from_intent(cls, throttle_percent, turn_percent, seq=None, sent_at_ms=None):
+        """Build one drive request directly from robot-level operator intent.
+
+        This helper is used by non-HTTP, non-WebSocket control paths such as
+        the Pico-side controller adapter. It preserves one normalization path
+        from signed `throttle/turn` intent into the drivetrain's internal
+        `rpm/direction/angle` target representation.
+        """
+        # MicroPython does not expose `cls.__new__` the same way CPython does
+        # for bypassing `__init__`, so use `object.__new__` directly here.
+        instance = object.__new__(cls)
+        instance.seq = cls._to_optional_int(seq)
+        instance.sent_at_ms = cls._to_optional_int(sent_at_ms)
+        instance.throttle_percent = cls._clamp_percent(int(throttle_percent))
+        instance.turn_percent = cls._clamp_percent(int(turn_percent))
+        signed_rpm = cls._percent_to_signed_rpm(instance.throttle_percent)
+        instance.target_rpm = cls._normalize_rpm(abs(signed_rpm))
+        instance.target_direction = 0 if signed_rpm >= 0 else 1
+        instance.target_angle = cls._percent_to_angle(instance.turn_percent)
+        return instance
+
     @staticmethod
     def _to_optional_int(value):
         if value is None:

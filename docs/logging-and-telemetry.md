@@ -23,6 +23,16 @@ Document the Pico logging architecture and the telemetry contract expected by th
 ### Telemetry packets
 - `telemetry(tag, **data)` emits JSON over UART with fields `t`, `tag`, and `data`.
 
+### Controller teleop diagnostics
+- `joystick_uart_receiver.py` now owns the full controller pipeline and logs
+  controller mode transitions instead of every loop iteration so observability
+  stays useful without adding high-rate log pressure.
+- The worker reports transitions such as `inactive -> driving` or
+  `driving -> armed_neutral` and records stop reasons like stale snapshot,
+  disconnect, neutral throttle, or drivetrain rejection.
+- This is intentionally transition-based because the same worker republishes
+  drive commands at a fixed cadence even when controller input is steady.
+
 ## Design rule
 UART failures must never crash the firmware.
 Logging also must never be able to block drivetrain control or websocket
