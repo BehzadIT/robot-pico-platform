@@ -1,5 +1,30 @@
 [
   {
+    "name": "freertos-kernel",
+    "type": "vendored-third-party",
+    "source_url": "https://github.com/FreeRTOS/FreeRTOS-Kernel",
+    "pinned_version": "V11.3.0",
+    "local_paths": [
+      "cpp/third_party/freertos-kernel"
+    ],
+    "import_name": "FreeRTOS-Kernel",
+    "patched": false,
+    "notes": "Vendored Pico C++ runtime dependency used by the dual-core Pico FreeRTOS runtime. Control and service tasks both live under RTOS semantics; task affinity keeps safety-critical control isolated from transport and networking."
+  },
+  {
+    "name": "mongoose",
+    "type": "vendored-third-party",
+    "source_url": "https://github.com/cesanta/mongoose",
+    "pinned_version": "7.20",
+    "local_paths": [
+      "cpp/third_party/mongoose/mongoose.c",
+      "cpp/third_party/mongoose/mongoose.h"
+    ],
+    "import_name": "mongoose",
+    "patched": false,
+    "notes": "Vendored Pico C++ runtime dependency for HTTP/WebSocket transport on the FreeRTOS service task pinned to core 0."
+  },
+  {
     "name": "microdot",
     "type": "vendored-third-party",
     "source_url": "https://github.com/miguelgrinberg/microdot",

@@ -1,12 +1,17 @@
 # Logging And Telemetry
 
 ## Purpose
-Document the Pico logging architecture and the telemetry contract expected by the ESP32 bridge and bench tools.
+Document the Pico logging architecture and the log parsing contract expected by the ESP32 bridge and bench tools.
 
 ## Current status
 - `Implemented`: `print()` output is mirrored to UART while preserving normal USB REPL output.
-- `Implemented`: structured logs and telemetry use UART-first behavior.
+- `Implemented`: structured logs use one stdout-oriented stream that stays readable by humans and parsable by tools.
 - `Project note`: preserving IDE compatibility is a hard requirement.
+- `Migration target`: in the C++ runtime, logging remains a service-side drain
+  and must not back-pressure the control domain.
+- `Migration status`: the C++ runtime now has service/control separation in
+  code, but the Pico SDK transport/logging path is still pending full hardware
+  validation on the Pico 2 W target.
 
 ## Behavior
 ### `print()`
@@ -17,11 +22,24 @@ Document the Pico logging architecture and the telemetry contract expected by th
   to the custom logger path made `mpremote` raw-REPL entry unreliable.
 
 ### Structured logs
-- `loge`, `logw`, `logi`, `logd`, `logv` emit formatted UART logs.
-- Current code also emits ANSI-colored output to the USB side, which is an implementation fact to keep in mind during tooling work.
+- `loge`, `logw`, `logi`, `logd`, `logv` emit formatted logs.
+- Keep the line format stable so tools can parse the same stream that humans
+  read:
+  - `<LEVEL> (<ticks_ms>) <tag>: <message>`
+- If the tag is empty, omit the tag segment cleanly rather than emitting a
+  blank placeholder.
+- Prefer key-value tails in the message body when a tool needs to parse extra
+  fields later.
 
-### Telemetry packets
-- `telemetry(tag, **data)` emits JSON over UART with fields `t`, `tag`, and `data`.
+### Emission policy
+- `Immediate`: faults and safety events log as soon as they occur.
+- `Transition`: state machines log only when the value changes.
+- `Rate-limited`: repeated warnings and retry progress use caller-owned rate
+  limiting so they do not spam the console.
+- `Sampled`: periodic summaries are caller-owned snapshots, used only when a
+  bounded heartbeat or debug summary is genuinely useful.
+- Sampling is not a logger feature. The owning subsystem decides whether a
+  sampled summary is enabled and when it stops.
 
 ### Controller teleop diagnostics
 - `joystick_uart_receiver.py` now owns the full controller pipeline and logs
@@ -37,6 +55,20 @@ Document the Pico logging architecture and the telemetry contract expected by th
 UART failures must never crash the firmware.
 Logging also must never be able to block drivetrain control or websocket
 command handling.
+
+## RTOS boundary
+- Logging transport belongs on the RTOS/service side in the C++
+  migration.
+- The control domain may emit events or sampled status, but it must not wait on
+  a logger task, socket, UART drain, or serialization step.
+- If the service-side logger queue is full, the system should drop or coalesce
+  logs rather than stall control.
+- Watchdog progress must reflect control progress, not successful logging.
+
+In the current C++ tree this boundary is represented by:
+- service-side runtime and transport code under `cpp/firmware/src/platform` and
+  `cpp/firmware/src/transport`
+- control-side event emission under `cpp/src/control` and `cpp/src/runtime`
 
 ## Stability learnings
 Recent teleop stabilization work showed that logging pressure was a primary
@@ -61,7 +93,6 @@ If teleop becomes unstable again, inspect:
 - global logger lock behavior
 - any change that routes normal USB REPL/stdout through the shared logger lock
 - drive-log sampling behavior in websocket transport
-- new telemetry added in stop/start paths
 - any synchronous print/log loop introduced in worker or route code
 
 ## Sources

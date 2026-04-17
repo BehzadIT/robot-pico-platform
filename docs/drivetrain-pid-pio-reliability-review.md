@@ -72,6 +72,16 @@ Design consequence:
 - the subsystem should own the PIO state machines, count polarity, conversion constants, and health/fault state
 - drivetrain code should consume encoder data from that subsystem instead of instantiating encoder objects itself
 
+Migration note:
+- the staged C++ runtime now follows this structure directly:
+  - `cpp/include/robot/hardware/drivetrain_encoder_subsystem.hpp`
+  - `cpp/include/robot/control/drivetrain_controller.hpp`
+  - `cpp/firmware/quadrature_counter.pio`
+  - `cpp/firmware/src/hardware/pico_quadrature_counter.cpp`
+  - `cpp/firmware/src/hardware/pico_motor_output_driver.cpp`
+- hardware validation is still required before removing the MicroPython runtime,
+  but the ownership model described in this review is now the C++ implementation target rather than just a recommendation.
+
 ## Current System Review
 
 ## Layer 1: Command Ingress And Drive Target State

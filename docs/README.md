@@ -9,6 +9,10 @@ repository.
 
 ## Documents
 - `firmware-architecture.md`: Pico runtime structure and module ownership.
+- `micropython-to-cpp-migration-audit.md`: parity audit and migration gap list
+  between the active MicroPython runtime and the staged Pico SDK / C++ runtime.
+- `runtime-boundaries.md`: RTOS/service versus control-domain ownership rules
+  for the C++ migration.
 - `motor-control-and-encoders.md`: drivetrain and encoder implementation notes.
 - `logging-and-telemetry.md`: Pico-side logging and UART telemetry behavior.
 - `drivetrain-pid-pio-reliability-review.md`: detailed reliability review and
@@ -16,6 +20,11 @@ repository.
 - `firmware-dependencies.json`: Pico runtime dependency and local fork metadata.
 - `code-documentation.md`: how to document MicroPython control, transport, and
   safety code without obscuring timing-critical behavior.
+
+## Board baseline
+- The current Pico SDK migration target is Raspberry Pi Pico 2 W.
+- Use `PICO_BOARD=pico2_w` for firmware configuration unless a document
+  explicitly calls out a different board.
 
 Hardware manuals, wiring notes, component lists, and mechanical images live in
 the parent `../../docs/assets` tree when this repo is checked out inside

@@ -184,3 +184,5 @@ cython_debug/
 
 # Local Pico secrets stay out of git but are still uploaded from the repo.
 /settings/secrets.py
+/cpp/include/robot/config/secrets.hpp
+/cpp/build-*/
