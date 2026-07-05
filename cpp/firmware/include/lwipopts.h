@@ -3,7 +3,7 @@
 /*
  * Minimal lwIP configuration for the Pico 2 W firmware.
  *
- * The service core uses Pico SDK CYW43 background networking and Mongoose's
+ * The service core uses Pico SDK CYW43 FreeRTOS networking and Mongoose's
  * Pico SDK + lwIP socket integration path. Keep BSD socket compatibility
  * enabled here so Mongoose can use the standard socket names it expects.
  */

@@ -7,6 +7,7 @@
 #include <string_view>
 
 #include "FreeRTOS.h"
+#include "pico/bootrom.h"
 #include "task.h"
 #include "robot/protocol/api_drive_request.hpp"
 #include "robot/support/logger.hpp"
@@ -79,6 +80,11 @@ void MongooseHttpServer::Poll(int timeout_ms) {
   if (initialized_) {
     mg_mgr_poll(&manager_, timeout_ms);
   }
+  if (bootloader_reboot_pending_ &&
+      xTaskGetTickCount() >= bootloader_reboot_deadline_) {
+    robot::support::LogW(kWsTag, "rebooting into BOOTSEL mode");
+    rom_reset_usb_boot(0, 0);
+  }
 }
 
 void MongooseHttpServer::StaticEventHandler(mg_connection* connection,
@@ -133,6 +139,11 @@ void MongooseHttpServer::HandleHttp(mg_connection* connection, mg_http_message* 
   }
 
   const std::string_view body(message->body.buf, message->body.len);
+  if (UriMatches(message->uri, "/bootloader") || UriMatches(message->uri, "/bootsel")) {
+    HandleBootloaderReboot(connection);
+    return;
+  }
+
   if (UriMatches(message->uri, "/stop")) {
     if (!runtime_->QueueStop(std::nullopt, "ws-http")) {
       LogRateLimitedWarning(queue_full_filter, "HTTP /stop rejected because control queue is full");
@@ -240,6 +251,31 @@ void MongooseHttpServer::HandleWebSocket(mg_connection* connection, mg_ws_messag
   ReplyError(connection, "unknown_command", seq, "unknown command");
 }
 
+void MongooseHttpServer::HandleBootloaderReboot(mg_connection* connection) {
+  if (!runtime_->QueueStop(std::nullopt, "maintenance-bootloader")) {
+    robot::support::LogW(kWsTag, "HTTP /bootloader rejected because control queue is full");
+    mg_http_reply(connection, 503, "", "{\"ok\":false,\"code\":\"queue_full\"}");
+    return;
+  }
+
+  const auto completion = WaitForCompletion();
+  if (!completion.has_value()) {
+    robot::support::LogW(kWsTag, "HTTP /bootloader stop completion timeout");
+    mg_http_reply(connection, 504, "", "{\"ok\":false,\"code\":\"timeout\"}");
+    return;
+  }
+  if (!completion->ok) {
+    robot::support::LogW(kWsTag,
+                         std::string("HTTP /bootloader stop failed code=") +
+                             completion->code + " detail=" + completion->detail);
+    mg_http_reply(connection, 409, "", "{\"ok\":false,\"code\":\"stop_failed\"}");
+    return;
+  }
+
+  ScheduleBootloaderReboot();
+  mg_http_reply(connection, 200, "", "{\"ok\":true,\"mode\":\"bootsel\"}");
+}
+
 void MongooseHttpServer::ReplyAck(mg_connection* connection,
                                   const char* code,
                                   std::optional<int> seq) {
@@ -273,38 +309,35 @@ void MongooseHttpServer::ReplyError(mg_connection* connection,
 
 void MongooseHttpServer::WaitAndReply(mg_connection* connection, std::optional<int> seq) {
   static robot::support::RateLimitFilter completion_timeout_filter(1000);
-  const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(250);
-  while (xTaskGetTickCount() <= deadline) {
-    if (const auto completion = runtime_->PollCompletion(); completion.has_value()) {
-      if (completion->ok) {
-        robot::support::LogI(
-            kWsTag, std::string("ack ") + completion->code +
-                         (completion->seq.has_value()
-                              ? std::string(" seq=") + std::to_string(*completion->seq)
-                              : std::string("")));
-        if (connection->is_websocket) {
-          ReplyAck(connection, completion->code.c_str(), completion->seq);
-        } else {
-          mg_http_reply(connection, 200, "", "{\"ok\":true}");
-        }
-      } else if (connection->is_websocket) {
-        robot::support::LogW(
-            kWsTag, std::string("error ") + completion->code +
-                         (completion->seq.has_value()
-                              ? std::string(" seq=") + std::to_string(*completion->seq)
-                              : std::string("")) +
-                         " detail=" + completion->detail);
-        ReplyError(connection, completion->code.c_str(), completion->seq,
-                   completion->detail.c_str());
+  const auto completion = WaitForCompletion();
+  if (completion.has_value()) {
+    if (completion->ok) {
+      robot::support::LogI(
+          kWsTag, std::string("ack ") + completion->code +
+                       (completion->seq.has_value()
+                            ? std::string(" seq=") + std::to_string(*completion->seq)
+                            : std::string("")));
+      if (connection->is_websocket) {
+        ReplyAck(connection, completion->code.c_str(), completion->seq);
       } else {
-        robot::support::LogW(kWsTag,
-                             std::string("HTTP command failed code=") + completion->code +
-                                 " detail=" + completion->detail);
-        mg_http_reply(connection, 409, "", "{\"ok\":false}");
+        mg_http_reply(connection, 200, "", "{\"ok\":true}");
       }
-      return;
+    } else if (connection->is_websocket) {
+      robot::support::LogW(
+          kWsTag, std::string("error ") + completion->code +
+                       (completion->seq.has_value()
+                            ? std::string(" seq=") + std::to_string(*completion->seq)
+                            : std::string("")) +
+                       " detail=" + completion->detail);
+      ReplyError(connection, completion->code.c_str(), completion->seq,
+                 completion->detail.c_str());
+    } else {
+      robot::support::LogW(kWsTag,
+                           std::string("HTTP command failed code=") + completion->code +
+                               " detail=" + completion->detail);
+      mg_http_reply(connection, 409, "", "{\"ok\":false}");
     }
-    vTaskDelay(pdMS_TO_TICKS(5));
+    return;
   }
 
   if (connection->is_websocket) {
@@ -314,6 +347,23 @@ void MongooseHttpServer::WaitAndReply(mg_connection* connection, std::optional<i
     LogRateLimitedWarning(completion_timeout_filter, "HTTP control completion timeout");
     mg_http_reply(connection, 504, "", "{\"ok\":false,\"code\":\"timeout\"}");
   }
+}
+
+std::optional<robot::runtime::ControlCompletion> MongooseHttpServer::WaitForCompletion() {
+  const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(250);
+  while (xTaskGetTickCount() <= deadline) {
+    if (const auto completion = runtime_->PollCompletion(); completion.has_value()) {
+      return completion;
+    }
+    vTaskDelay(pdMS_TO_TICKS(5));
+  }
+  return std::nullopt;
+}
+
+void MongooseHttpServer::ScheduleBootloaderReboot() {
+  bootloader_reboot_pending_ = true;
+  bootloader_reboot_deadline_ = xTaskGetTickCount() + pdMS_TO_TICKS(250);
+  robot::support::LogW(kWsTag, "BOOTSEL reboot scheduled");
 }
 
 std::optional<int> MongooseHttpServer::ExtractJsonInt(std::string_view json,

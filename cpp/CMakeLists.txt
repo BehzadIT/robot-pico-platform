@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.20)
 
 option(ROBOT_PICO_BUILD_TESTS "Build host-side parity tests" ON)
 option(ROBOT_PICO_ENABLE_FIRMWARE "Enable the Pico SDK firmware target" OFF)
+option(ROBOT_PICO_FIRMWARE_DIAGNOSTIC_O1
+       "Build the Pico firmware with -O1 for RP2350/CYW43 diagnostics" ON)
 
 if(ROBOT_PICO_ENABLE_FIRMWARE)
     if(NOT PICO_SDK_PATH AND DEFINED ENV{PICO_SDK_PATH})
@@ -21,6 +23,15 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(ROBOT_PICO_ENABLE_FIRMWARE AND CMAKE_CROSSCOMPILING)
     set(ROBOT_PICO_BUILD_TESTS OFF CACHE BOOL "Build host-side parity tests" FORCE)
+endif()
+
+if(ROBOT_PICO_ENABLE_FIRMWARE AND ROBOT_PICO_FIRMWARE_DIAGNOSTIC_O1)
+    # Pico 2 W / CYW43 initialization has shown optimization-sensitive failures
+    # on some dual-core builds. Use -O1 as the diagnostic profile until the
+    # lower-level driver boundary is proven stable.
+    set(CMAKE_C_FLAGS_RELEASE "-g -O1 -DNDEBUG" CACHE STRING "Release C flags" FORCE)
+    set(CMAKE_CXX_FLAGS_RELEASE "-g -O1 -DNDEBUG" CACHE STRING "Release C++ flags" FORCE)
+    set(CMAKE_ASM_FLAGS_RELEASE "-g -O1 -DNDEBUG" CACHE STRING "Release ASM flags" FORCE)
 endif()
 
 add_library(

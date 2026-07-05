@@ -6,7 +6,8 @@
 #define configUSE_TIME_SLICING 1
 #define configUSE_IDLE_HOOK 0
 #define configUSE_TICK_HOOK 0
-#define configCPU_CLOCK_HZ 125000000UL
+// Pico 2 W/RP2350 defaults SYS_CLK_HZ to 150 MHz unless firmware overrides it.
+#define configCPU_CLOCK_HZ 150000000UL
 #define configTICK_RATE_HZ 1000
 #define configMAX_PRIORITIES 8
 #define configMINIMAL_STACK_SIZE 512

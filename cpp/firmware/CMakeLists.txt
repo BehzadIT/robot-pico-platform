@@ -73,6 +73,14 @@ target_include_directories(
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
+target_compile_definitions(
+  robot_pico_firmware
+  PRIVATE
+  ROBOT_PICO_WIFI_INIT_WATCHDOG=0
+  ROBOT_PICO_WIFI_WAIT_FOR_USB_MS=0
+  ROBOT_PICO_WIFI_USB_SETTLE_MS=1000
+)
+
 target_link_libraries(
     robot_pico_firmware
     PRIVATE
@@ -93,3 +101,221 @@ target_link_libraries(
 pico_enable_stdio_uart(robot_pico_firmware 0)
 pico_enable_stdio_usb(robot_pico_firmware 1)
 pico_add_extra_outputs(robot_pico_firmware)
+
+add_executable(
+  robot_pico_usb_stdio_probe
+  src/diagnostics/usb_stdio_probe.cpp
+)
+
+target_link_libraries(
+  robot_pico_usb_stdio_probe
+  PRIVATE
+  pico_stdlib
+)
+
+pico_enable_stdio_uart(robot_pico_usb_stdio_probe 0)
+pico_enable_stdio_usb(robot_pico_usb_stdio_probe 1)
+pico_add_extra_outputs(robot_pico_usb_stdio_probe)
+
+add_executable(
+  robot_pico_freertos_usb_probe
+  src/diagnostics/freertos_usb_probe.cpp
+  src/platform/freertos_hooks.cpp
+)
+
+target_include_directories(
+  robot_pico_freertos_usb_probe
+  PRIVATE
+  ${CMAKE_CURRENT_LIST_DIR}/include
+)
+
+target_link_libraries(
+  robot_pico_freertos_usb_probe
+  PRIVATE
+  freertos_kernel
+  pico_stdlib
+)
+
+pico_enable_stdio_uart(robot_pico_freertos_usb_probe 0)
+pico_enable_stdio_usb(robot_pico_freertos_usb_probe 1)
+pico_add_extra_outputs(robot_pico_freertos_usb_probe)
+
+add_executable(
+  robot_pico_ab_no_wifi
+  main.cpp
+  src/app/pico_firmware_app.cpp
+  src/platform/pico_service_core.cpp
+  src/platform/freertos_hooks.cpp
+  src/transport/mongoose_http_server.cpp
+  src/hardware/pico_motor_output_driver.cpp
+  src/hardware/pico_quadrature_counter.cpp
+  src/platform/pico_watchdog.cpp
+)
+
+pico_generate_pio_header(
+  robot_pico_ab_no_wifi
+  ${CMAKE_CURRENT_LIST_DIR}/quadrature_counter.pio
+)
+
+target_include_directories(
+  robot_pico_ab_no_wifi
+  PRIVATE
+  ../include
+  ${CMAKE_CURRENT_LIST_DIR}/include
+  ../third_party/mongoose
+  ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+target_compile_definitions(
+  robot_pico_ab_no_wifi
+  PRIVATE
+  ROBOT_PICO_SKIP_WIFI=1
+)
+
+target_link_libraries(
+  robot_pico_ab_no_wifi
+  PRIVATE
+  robot_core
+  mongoose_embedded
+  freertos_kernel
+  pico_stdlib
+  pico_multicore
+  pico_cyw43_arch_lwip_sys_freertos
+  hardware_clocks
+  hardware_gpio
+  hardware_pio
+  hardware_pwm
+  hardware_uart
+  hardware_watchdog
+)
+
+pico_enable_stdio_uart(robot_pico_ab_no_wifi 0)
+pico_enable_stdio_usb(robot_pico_ab_no_wifi 1)
+pico_add_extra_outputs(robot_pico_ab_no_wifi)
+
+add_executable(
+  robot_pico_ab_wifi_usb_settle
+  main.cpp
+  src/app/pico_firmware_app.cpp
+  src/platform/pico_service_core.cpp
+  src/platform/freertos_hooks.cpp
+  src/transport/mongoose_http_server.cpp
+  src/hardware/pico_motor_output_driver.cpp
+  src/hardware/pico_quadrature_counter.cpp
+  src/platform/pico_watchdog.cpp
+)
+
+pico_generate_pio_header(
+  robot_pico_ab_wifi_usb_settle
+  ${CMAKE_CURRENT_LIST_DIR}/quadrature_counter.pio
+)
+
+target_include_directories(
+  robot_pico_ab_wifi_usb_settle
+  PRIVATE
+  ../include
+  ${CMAKE_CURRENT_LIST_DIR}/include
+  ../third_party/mongoose
+  ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+target_compile_definitions(
+  robot_pico_ab_wifi_usb_settle
+  PRIVATE
+  ROBOT_PICO_WIFI_INIT_WATCHDOG=0
+  ROBOT_PICO_WIFI_WAIT_FOR_USB_MS=5000
+  ROBOT_PICO_WIFI_USB_SETTLE_MS=2000
+)
+
+target_link_libraries(
+  robot_pico_ab_wifi_usb_settle
+  PRIVATE
+  robot_core
+  mongoose_embedded
+  freertos_kernel
+  pico_stdlib
+  pico_multicore
+  pico_cyw43_arch_lwip_sys_freertos
+  hardware_clocks
+  hardware_gpio
+  hardware_pio
+  hardware_pwm
+  hardware_uart
+  hardware_watchdog
+)
+
+pico_enable_stdio_uart(robot_pico_ab_wifi_usb_settle 0)
+pico_enable_stdio_usb(robot_pico_ab_wifi_usb_settle 1)
+pico_add_extra_outputs(robot_pico_ab_wifi_usb_settle)
+
+add_executable(
+  robot_pico_ab_cyw43_probe
+  src/diagnostics/cyw43_freertos_probe.cpp
+  src/platform/freertos_hooks.cpp
+)
+
+target_include_directories(
+  robot_pico_ab_cyw43_probe
+  PRIVATE
+  ${CMAKE_CURRENT_LIST_DIR}/include
+)
+
+target_link_libraries(
+  robot_pico_ab_cyw43_probe
+  PRIVATE
+  freertos_kernel
+  pico_stdlib
+  pico_cyw43_arch_lwip_sys_freertos
+  hardware_watchdog
+)
+
+pico_enable_stdio_uart(robot_pico_ab_cyw43_probe 0)
+pico_enable_stdio_usb(robot_pico_ab_cyw43_probe 1)
+pico_add_extra_outputs(robot_pico_ab_cyw43_probe)
+
+function(add_robot_pico_cyw43_probe_variant target_name)
+  add_executable(
+    ${target_name}
+    src/diagnostics/cyw43_freertos_probe.cpp
+    src/platform/freertos_hooks.cpp
+  )
+
+  target_include_directories(
+    ${target_name}
+    PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/include
+  )
+
+  target_link_libraries(
+    ${target_name}
+    PRIVATE
+    freertos_kernel
+    pico_stdlib
+    pico_cyw43_arch_lwip_sys_freertos
+    hardware_watchdog
+  )
+
+  target_compile_definitions(${target_name} PRIVATE ${ARGN})
+
+  pico_enable_stdio_uart(${target_name} 0)
+  pico_enable_stdio_usb(${target_name} 1)
+  pico_add_extra_outputs(${target_name})
+endfunction()
+
+add_robot_pico_cyw43_probe_variant(
+  robot_pico_ab_cyw43_probe_no_watchdog
+  ROBOT_PICO_CYW43_PROBE_WATCHDOG=0
+)
+
+add_robot_pico_cyw43_probe_variant(
+  robot_pico_ab_cyw43_probe_usb_settle
+  ROBOT_PICO_CYW43_PROBE_WATCHDOG=0
+  ROBOT_PICO_CYW43_PROBE_WAIT_FOR_USB_MS=5000
+  ROBOT_PICO_CYW43_PROBE_USB_SETTLE_MS=2000
+)
+
+add_robot_pico_cyw43_probe_variant(
+  robot_pico_ab_cyw43_probe_no_affinity
+  ROBOT_PICO_CYW43_PROBE_WATCHDOG=0
+  ROBOT_PICO_CYW43_PROBE_TASK_AFFINITY=0
+)
