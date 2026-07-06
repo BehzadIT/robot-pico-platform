@@ -96,9 +96,13 @@ void LogResetContext() {
 }  // namespace
 
 PicoFirmwareApp::PicoFirmwareApp()
+#if defined(ROBOT_PICO_STUB_CONTROL_HARDWARE) && ROBOT_PICO_STUB_CONTROL_HARDWARE
+    : control_core_runtime_(shared_state_),
+#else
     : control_core_runtime_(shared_state_, MakePicoCounterFactory(),
                             std::make_unique<robot::hardware::PicoMotorOutputDriver>(),
                             std::make_unique<robot::platform::PicoWatchdog>()),
+#endif
       service_core_(service_core_runtime_) {}
 
 void PicoFirmwareApp::Run() {
@@ -107,7 +111,11 @@ void PicoFirmwareApp::Run() {
   LogResetContext();
   robot::support::LogI(kBootTag, "stdio initialized");
   RecordBootStage(kBootStageStdioReady, "stdio_initialized");
+#if defined(ROBOT_PICO_SKIP_CONTROLLER_UART) && ROBOT_PICO_SKIP_CONTROLLER_UART
+  robot::support::LogW(kBootTag, "ROBOT_PICO_SKIP_CONTROLLER_UART enabled; skipping UART init");
+#else
   InitializeControllerUart();
+#endif
   RecordBootStage(kBootStageControllerUartReady, "controller_uart_initialized");
   robot::support::LogI(kBootTag, "launching service task on core 0");
   RecordBootStage(kBootStageServiceStartRequested, "service_start_requested");
@@ -115,6 +123,9 @@ void PicoFirmwareApp::Run() {
     robot::support::LogE(kBootTag, "service task failed to start");
     configASSERT(false);
   }
+#if defined(ROBOT_PICO_SKIP_CONTROL_TASK) && ROBOT_PICO_SKIP_CONTROL_TASK
+  robot::support::LogW(kBootTag, "ROBOT_PICO_SKIP_CONTROL_TASK enabled; skipping control task");
+#else
   robot::support::LogI(kBootTag, "launching control task on core 1");
   RecordBootStage(kBootStageControlStartRequested, "control_start_requested");
   const BaseType_t control_task_result = xTaskCreateAffinitySet(
@@ -124,6 +135,7 @@ void PicoFirmwareApp::Run() {
     robot::support::LogE(kBootTag, "control task failed to start");
     configASSERT(false);
   }
+#endif
   robot::support::LogI(kBootTag, "starting scheduler");
   RecordBootStage(kBootStageSchedulerStarting, "scheduler_starting");
   vTaskStartScheduler();
