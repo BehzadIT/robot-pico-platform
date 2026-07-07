@@ -22,6 +22,9 @@ board migration is being done intentionally.
 - `firmware/` contains the Pico SDK runtime tree with FreeRTOS service-side
   bring-up, Mongoose transport scaffolding, Pico motor/watchdog drivers, and a
   PIO quadrature counter port.
+- `firmware/apps/pico_control_no_wifi/` contains the clean-start Pico SDK app.
+  It is the new starting point for the no-network control firmware and does not
+  reuse the existing migrated runtime sources.
 
 ## Build modes
 - Default host build:
@@ -34,7 +37,10 @@ board migration is being done intentionally.
   - `source tools/pico_sdk_env.sh`
   - or export `PICO_SDK_PATH=/home/behzad/Projects/pico-sdk`
   - `cmake -S cpp -B cpp/build-pico -DROBOT_PICO_ENABLE_FIRMWARE=ON -DPICO_BOARD=pico2_w`
-  - `cmake --build cpp/build-pico`
+  - `cmake --build cpp/build-pico --target robot_pico_control_no_wifi`
+- Clean app deploy helper:
+  - `python3 tools/pico_cpp_deploy.py build`
+  - `python3 tools/pico_cpp_deploy.py flash --build`
 
 The firmware build links the vendored `FreeRTOS-Kernel` and `Mongoose` trees
 from `cpp/third_party/`; it does not download dependencies at configure time.

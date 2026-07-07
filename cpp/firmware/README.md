@@ -28,6 +28,15 @@ This tree now contains the Pico SDK firmware bring-up:
 It is still not bench-validated. The C++ runtime should continue to be treated
 as the migration target until the hardware parity checklist passes.
 
+## Clean app
+The clean-start app lives in `apps/pico_control_no_wifi/` and builds as
+`robot_pico_control_no_wifi`.
+
+That target is intentionally separate from the migrated runtime sources. Its
+initial job is only to prove the fast C++ bench loop: USB stdio, picotool reset
+support, startup logs, and heartbeat output without CYW43, network transport,
+motor output, encoder ownership, or watchdog-controlled motion.
+
 ## Config split
 - Tracked non-secret config lives in `cpp/include/robot/config/config.hpp`.
 - Local secrets should be provided through a gitignored `secrets.hpp` copied

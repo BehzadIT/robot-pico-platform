@@ -48,6 +48,50 @@ For rationale and stability notes, see the shared firmware docs:
 - `../docs/firmware/logging-and-telemetry.md`
 - `../docs/firmware/pico-firmware-architecture.md`
 
+## Pico C++ UF2 Workflow
+Use the tracked C++ helper for Pico SDK firmware targets:
+
+```bash
+python3 tools/pico_cpp_deploy.py build
+```
+
+The default target is `robot_pico_control_no_wifi`, a clean Pico SDK app under
+`cpp/firmware/apps/pico_control_no_wifi/`. It starts with USB stdio, picotool
+reset support, and a heartbeat only. It intentionally does not reuse the
+existing migrated runtime sources.
+
+Common commands:
+
+```bash
+python3 tools/pico_cpp_deploy.py build
+python3 tools/pico_cpp_deploy.py flash --build
+python3 tools/pico_cpp_deploy.py flash-msd --build
+python3 tools/pico_cpp_deploy.py reboot --mode bootsel
+python3 tools/pico_cpp_deploy.py reboot --mode app
+python3 tools/pico_cpp_deploy.py monitor --port /dev/ttyACM0
+minicom -D /dev/ttyACM0 -b 115200
+```
+
+Use `--target robot_pico_usb_stdio_probe` only when intentionally checking the
+older diagnostic probe target.
+
+The helper uses the host `picotool` executable for UF2 flashing and USB reset.
+It does not vendor Raspberry Pi host tools into this repository. If `picotool`
+is missing, the helper exits with setup guidance instead of falling back to a
+manual copy or custom USB implementation.
+
+When the Pico is already in BOOTSEL and mounted as `RP2350` or `RPI-RP2`, use
+`flash-msd` to copy the UF2 through the official mass-storage bootloader path.
+This is the fallback for machines where the CMake-provided `picotool` was built
+without USB support.
+
+Clean app tool notes live in
+`cpp/firmware/apps/pico_control_no_wifi/TOOLS.md`.
+
+This workflow is a bench-loop affordance only. It does not move control,
+safety, motor, encoder, or transport ownership between Pico, ESP32, and
+Android.
+
 Root directory purpose:
 - `main.py`: Pico firmware bootstrap
 - `src/`: project-owned runtime code

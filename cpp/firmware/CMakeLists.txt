@@ -6,6 +6,8 @@ set(FREERTOS_PORT "GCC_RP2040" CACHE STRING "" FORCE)
 
 pico_sdk_init()
 
+add_subdirectory(apps/pico_control_no_wifi)
+
 add_library(freertos_config INTERFACE)
 target_include_directories(
   freertos_config
