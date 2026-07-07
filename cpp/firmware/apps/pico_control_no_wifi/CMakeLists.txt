@@ -1,11 +1,19 @@
 add_executable(
   robot_pico_control_no_wifi
   main.cpp
+  ../../src/platform/freertos_hooks.cpp
+)
+
+target_include_directories(
+  robot_pico_control_no_wifi
+  PRIVATE
+  ../../include
 )
 
 target_link_libraries(
   robot_pico_control_no_wifi
   PRIVATE
+  freertos_kernel
   pico_stdlib
 )
 
@@ -13,7 +21,7 @@ target_compile_definitions(
   robot_pico_control_no_wifi
   PRIVATE
   ROBOT_PICO_APP_NAME="robot_pico_control_no_wifi"
-  ROBOT_PICO_APP_STAGE="clean_bench_loop"
+  ROBOT_PICO_APP_STAGE="rtos_skeleton"
   PICO_STDIO_USB_ENABLE_RESET_VIA_VENDOR_INTERFACE=1
   PICO_STDIO_USB_RESET_INTERFACE_SUPPORT_RESET_TO_BOOTSEL=1
   PICO_STDIO_USB_RESET_INTERFACE_SUPPORT_RESET_TO_FLASH_BOOT=1

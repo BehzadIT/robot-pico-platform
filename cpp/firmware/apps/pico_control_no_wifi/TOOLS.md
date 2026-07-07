@@ -4,8 +4,9 @@
 This file records the host-side tools used for the clean Pico C++ feedback loop.
 
 The clean app is `robot_pico_control_no_wifi`. It is intentionally separate from
-the migrated C++ runtime and currently proves only USB stdio, flash/reboot
-workflow, startup logs, and heartbeat output.
+the migrated C++ runtime and currently proves USB stdio, flash/reboot workflow,
+startup logs, FreeRTOS SMP task startup, pinned service/control task ownership,
+and deterministic skeleton heartbeat output.
 
 ## Tools
 ### `picotool`
@@ -75,10 +76,36 @@ Equivalent helper command:
 python3 tools/pico_cpp_deploy.py flash-msd --build
 ```
 
-## Serial Logs
-`minicom` is used to observe USB serial output from the clean app.
+## Serial Observation Tool Guidance
+For Pico clean-app hardware verification, use the repo helper `monitor` for
+agent-run evidence capture and `minicom` for human interactive observation.
 
-Open logs:
+### `python3 tools/pico_cpp_deploy.py monitor`
+This is a lightweight Python/pyserial-based serial reader in the repo helper. It
+opens the Pico serial port, reads bytes, prints them to the agent terminal, and
+can exit automatically with `--timeout`.
+
+Use it when:
+- an agent needs non-interactive proof of boot logs or heartbeat logs;
+- the result should be captured directly in command output;
+- the check is mostly true/false, such as "did the boot banner appear?" or "are
+  service/control heartbeats present?";
+- the agent will report exact observed lines back to the user.
+
+Example:
+
+```bash
+python3 tools/pico_cpp_deploy.py monitor --timeout 30
+```
+
+Important learned workflow: if boot logs matter, start `monitor` first, then
+flash or reboot the Pico from another command. The helper waits for
+`/dev/ttyACM0`, prints serial output into command output, and reconnects if the
+Pico disappears during a reboot.
+
+### `minicom`
+`minicom` is an interactive serial terminal. Use it when manual interaction or a
+persistent human-visible session is more useful than a bounded evidence capture.
 
 ```bash
 minicom -D /dev/ttyACM0 -b 115200
@@ -90,11 +117,15 @@ Expected startup output:
 
 ```text
 robot_pico_control_no_wifi: boot
-robot_pico_control_no_wifi: stage=clean_bench_loop
+robot_pico_control_no_wifi: stage=rtos_skeleton
 robot_pico_control_no_wifi: board=pico2_w stdio=usb picotool_reset=enabled
-robot_pico_control_no_wifi: no cyw43, no transport, no motor output
-robot_pico_control_no_wifi: ready for flash/reboot feedback-loop test
-robot_pico_control_no_wifi: heartbeat=0 uptime_ms=...
+robot_pico_control_no_wifi: no cyw43, no network, no transport, no hardware output
+robot_pico_control_no_wifi: FreeRTOS SMP skeleton with pinned service/control tasks
+robot_pico_control_no_wifi: starting scheduler
+robot_pico_control_no_wifi: service started core=0 count=0 uptime_ms=...
+robot_pico_control_no_wifi: control started core=1 count=0 uptime_ms=...
+robot_pico_control_no_wifi: control heartbeat core=1 count=0 uptime_ms=...
+robot_pico_control_no_wifi: service heartbeat core=0 count=0 uptime_ms=...
 ```
 
 ## Current Verified State

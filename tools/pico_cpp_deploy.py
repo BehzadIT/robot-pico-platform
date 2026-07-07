@@ -250,16 +250,33 @@ def monitor(port: str, baud: int, timeout_s: float | None) -> int:
 
     deadline = time.monotonic() + timeout_s if timeout_s is not None else None
     status(f"monitoring {port} at {baud} baud; press Ctrl-C to exit")
-    with serial.Serial(port, baudrate=baud, timeout=0.1) as serial_port:
-        try:
-            while deadline is None or time.monotonic() < deadline:
-                data = serial_port.read(serial_port.in_waiting or 1)
-                if data:
-                    sys.stdout.buffer.write(data)
-                    sys.stdout.buffer.flush()
-        except KeyboardInterrupt:
-            status("monitor stopped")
-            return 130
+    waiting_reported = False
+    try:
+        while deadline is None or time.monotonic() < deadline:
+            try:
+                serial_port = serial.Serial(port, baudrate=baud, timeout=0.1)
+            except serial.SerialException:
+                if not waiting_reported:
+                    status(f"waiting for {port} to appear")
+                    waiting_reported = True
+                time.sleep(0.2)
+                continue
+
+            waiting_reported = False
+            status(f"attached to {port}")
+            with serial_port:
+                while deadline is None or time.monotonic() < deadline:
+                    try:
+                        data = serial_port.read(serial_port.in_waiting or 1)
+                    except serial.SerialException:
+                        status(f"{port} disconnected; waiting for it to reappear")
+                        break
+                    if data:
+                        sys.stdout.buffer.write(data)
+                        sys.stdout.buffer.flush()
+    except KeyboardInterrupt:
+        status("monitor stopped")
+        return 130
     return 0
 
 

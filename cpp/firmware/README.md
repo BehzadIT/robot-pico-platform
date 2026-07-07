@@ -33,9 +33,21 @@ The clean-start app lives in `apps/pico_control_no_wifi/` and builds as
 `robot_pico_control_no_wifi`.
 
 That target is intentionally separate from the migrated runtime sources. Its
-initial job is only to prove the fast C++ bench loop: USB stdio, picotool reset
-support, startup logs, and heartbeat output without CYW43, network transport,
-motor output, encoder ownership, or watchdog-controlled motion.
+current job is to prove the fast C++ bench loop plus the no-network RTOS
+skeleton: USB stdio, picotool reset support, startup logs, pinned FreeRTOS
+service/control tasks, and deterministic heartbeat output without CYW43,
+network transport, motor output, encoder ownership, or watchdog-controlled
+motion.
+
+## Target names
+- `robot_pico_firmware`: current migrated Pico C++ firmware path with runtime
+  scaffolding, FreeRTOS, transport, hardware wrappers, and control-core wiring.
+- `robot_pico_control_no_wifi`: clean-start Pico SDK app used to rebuild the
+  no-network control firmware in small verified stages.
+
+Keep these targets parallel until the clean-start path has independently proven
+boot, RTOS task placement, UART handoff, command admission, stale-stop behavior,
+and motor safety on the bench.
 
 ## Config split
 - Tracked non-secret config lives in `cpp/include/robot/config/config.hpp`.
