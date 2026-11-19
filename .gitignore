@@ -1,6 +1,20 @@
 # Config files
 local.properties
 
+# Machine-local editor and device state. Portable inspections, library
+# declarations, and run configurations remain tracked under `.idea/`.
+.idea/micropython-tools-settings.xml
+.idea/modules.xml
+.idea/*.iml
+.idea/workspace.xml
+.idea/shelf/
+
+# OS and editor backup files
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
