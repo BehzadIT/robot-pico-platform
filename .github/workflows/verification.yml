@@ -1,0 +1,32 @@
+name: Pico verification
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  host-and-firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: cmake -S cpp -B cpp/build-host
+      - run: cmake --build cpp/build-host
+      - run: ctest --test-dir cpp/build-host --output-on-failure
+      - uses: actions/checkout@v4
+        with:
+          repository: raspberrypi/pico-sdk
+          ref: 2.2.0
+          path: pico-sdk
+          submodules: recursive
+      - run: cmake -S cpp -B cpp/build-pico-ci -DROBOT_PICO_ENABLE_FIRMWARE=ON -DPICO_BOARD=pico2_w
+        env:
+          PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
+      - run: cmake --build cpp/build-pico-ci --target robot_pico_control_no_wifi
+        env:
+          PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
+      - run: python3 tools/robot_adapter.py describe --json

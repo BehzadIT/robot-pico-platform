@@ -503,6 +503,39 @@ void TestJoystickParser() {
   Require(parsed[0].seq == 9, "decoded seq should match");
   Require(parsed[0].right_trigger == 400, "decoded trigger should match");
   Require(parsed[0].received_at_ms == 77, "receive timestamp should be injected");
+
+  JoystickFrameParser truncated_parser;
+  const std::size_t split = frame.size() / 2;
+  const auto incomplete = truncated_parser.Feed(frame.data(), split, 80);
+  Require(incomplete.empty(), "truncated frame should remain buffered");
+  const auto completed = truncated_parser.Feed(
+      frame.data() + split, frame.size() - split, 81);
+  Require(completed.size() == 1,
+          "remaining bytes should complete exactly one buffered frame");
+  Require(completed[0].received_at_ms == 81,
+          "completed frame should use the completion receive timestamp");
+
+  auto bad_crc = frame;
+  bad_crc[bad_crc.size() - 1] ^= 0xFF;
+  std::vector<uint8_t> bad_then_good = bad_crc;
+  bad_then_good.insert(bad_then_good.end(), frame.begin(), frame.end());
+  JoystickFrameParser crc_parser;
+  const auto after_bad_crc =
+      crc_parser.Feed(bad_then_good.data(), bad_then_good.size(), 90);
+  Require(after_bad_crc.size() == 1,
+          "checksum failure should be rejected without breaking the receive loop");
+  Require(after_bad_crc[0].seq == snapshot.seq,
+          "valid frame after checksum failure should decode normally");
+
+  auto bad_version = frame;
+  bad_version[2] = static_cast<uint8_t>(robot::protocol::kFrameVersion + 1);
+  std::vector<uint8_t> bad_version_then_good = bad_version;
+  bad_version_then_good.insert(bad_version_then_good.end(), frame.begin(), frame.end());
+  JoystickFrameParser version_parser;
+  const auto after_bad_version = version_parser.Feed(
+      bad_version_then_good.data(), bad_version_then_good.size(), 100);
+  Require(after_bad_version.size() == 1,
+          "unsupported frame version should not block the next valid frame");
 }
 
 }  // namespace

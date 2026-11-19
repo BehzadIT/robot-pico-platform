@@ -26,6 +26,14 @@ repository.
 - Use `PICO_BOARD=pico2_w` for firmware configuration unless a document
   explicitly calls out a different board.
 
+## Agent Verification Adapter
+
+`python3 tools/robot_adapter.py doctor --json` performs passive Pico toolchain
+discovery. The default host and firmware scenarios reuse CMake, CTest, and
+`pico_cpp_deploy.py`; they do not merge the MicroPython, migrated C++, and
+clean no-network targets. Flash/boot and physical scenarios are separately
+gated, and Pico remains the final control and safety authority.
+
 Hardware manuals, wiring notes, component lists, and mechanical images live in
 the parent `../../docs/assets` tree when this repo is checked out inside
 `ai-robot`.
